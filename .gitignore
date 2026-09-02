@@ -1,0 +1,5 @@
+Onion_image.jpg
+*.jpg
+*.png
+.DS_Store
+Thumbs.db
