@@ -1,5 +1,4 @@
 Onion_image.jpg
-*.jpg
-*.png
+ref/
 .DS_Store
 Thumbs.db
