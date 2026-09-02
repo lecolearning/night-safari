@@ -244,7 +244,7 @@
   };
 
   // Portraits prefer a PNG in img/<key>.png (e.g. AI-generated or hand-drawn); falls back to the SVG if missing.
-  const portraitImg = (key) => `<img class="art portrait-img" src="img/${key}.png" alt="" onerror="this.outerHTML=ART.portrait('${key}')">`;
+  const portraitImg = (key) => `<img class="art portrait-img" src="img/${key}.png" alt="" onerror="this.outerHTML=ART.svgPortrait('${key}')">`;
   const sceneImg = (key) => `<img class="scene" src="img/scene_${key}.png" alt="" onerror="this.outerHTML=ART.svgScene('${key}')">`;
   window.ART = { portrait: portraitImg, svgPortrait: portrait, scene: sceneImg, svgScene: (k) => SCENES[k] || '', BODY };
 })();
