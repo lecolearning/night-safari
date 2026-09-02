@@ -243,5 +243,8 @@
     drum: scene(P.deep + P.stars(1) + P.trees('#0a1030') + P.ground('#173a3a', 215) + P.peekEyes + P.fireflies + P.moon(340, 50, 30)),
   };
 
-  window.ART = { portrait, scene: (k) => SCENES[k] || '', BODY };
+  // Portraits prefer a PNG in img/<key>.png (e.g. AI-generated or hand-drawn); falls back to the SVG if missing.
+  const portraitImg = (key) => `<img class="art portrait-img" src="img/${key}.png" alt="" onerror="this.outerHTML=ART.portrait('${key}')">`;
+  const sceneImg = (key) => `<img class="scene" src="img/scene_${key}.png" alt="" onerror="this.outerHTML=ART.svgScene('${key}')">`;
+  window.ART = { portrait: portraitImg, svgPortrait: portrait, scene: sceneImg, svgScene: (k) => SCENES[k] || '', BODY };
 })();

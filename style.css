@@ -210,3 +210,6 @@ h1.pixel{font-size:clamp(30px,8.6vw,46px);font-weight:700}
 .idblock.quotes{font-style:italic}
 .idfoot{font-size:13px;color:#5e5673;font-weight:700;margin-top:10px}
 .art{width:100%;height:100%;display:block;overflow:visible}
+
+.portrait-img{object-fit:contain;background:#fff}
+img.scene{object-fit:cover}
