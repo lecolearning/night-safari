@@ -31,6 +31,10 @@ const ART_KEYS = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 
 const FREE_CELL = { icon: '💛', label: 'Here with you', kind: 'free' };
 
 // Night Safari residents and the small sensory things you actually look for in the dark.
+// Every named species below is confirmed at Night Safari, either on Mandai's own
+// animals-and-zones pages or in its own press material (dhole, Malayan tiger).
+// Sambar deer, capybara and pythons were dropped: they appear only in third-party
+// guides and could leave a square that can never honestly be ticked.
 const WILDLIFE = [
   ['🦦', 'Asian small-clawed otter', 'otter'],
   ['🐯', 'A Malayan tiger, prowling', 'tiger'],
@@ -47,13 +51,13 @@ const WILDLIFE = [
   ['🦇', 'A fruit bat, wings folded'],
   ['🦏', 'A one-horned rhino, calm'],
   ['🦁', 'A lion with a proper mane'],
-  ['🦌', 'A sambar deer, big ears'],
+  ['😈', 'A Tasmanian devil, awake'],
   ['🐗', 'A babirusa and its tusks'],
   ['🌵', 'A porcupine, quills out'],
   ['🦘', 'A wallaby, mid-hop'],
-  ['🫓', 'A capybara, deeply calm'],
+  ['🐆', 'A leopard, high on a branch'],
   ['🌴', 'A palm civet on the move'],
-  ['🐍', 'A snake, perfectly still'],
+  ['🐿️', 'A sugar glider, tiny, quick'],
   ['👀', 'Glowing eyes in the dark'],
   ['👂', 'Heard, but never seen'],
   ['💤', 'An animal fast asleep'],

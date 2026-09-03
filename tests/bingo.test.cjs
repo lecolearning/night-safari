@@ -1296,3 +1296,47 @@ test('the gate still opens when storage is denied, for this visit', () => {
   const page = boot({ gateOpen: false, storageDenied: true });
   assert.equal(page.read("tryGate('mirepoix')"), true, 'a private window should still get in');
 });
+
+// ---------- the wildlife squares must name real park residents ----------
+
+// Confirmed on Mandai's own animals-and-zones pages, or in Mandai press material
+// (dhole, Malayan tiger). A square naming an animal that is not here would be a
+// square that can never honestly be ticked, so new names must be added knowingly.
+const CONFIRMED_RESIDENTS = [
+  'otter', 'tiger', 'pangolin', 'loris', 'fishing cat', 'binturong', 'dhole',
+  'tapir', 'elephant', 'hyena', 'flying squirrel', 'leopard cat', 'fruit bat',
+  'rhino', 'lion', 'babirusa', 'porcupine', 'wallaby', 'civet', 'tasmanian devil',
+  'leopard', 'sugar glider',
+];
+// Named in third-party guides only, so deliberately kept off the card.
+const UNCONFIRMED = ['capybara', 'sambar', 'python', 'snake', 'giraffe', 'panda', 'koala'];
+
+test('no wildlife square names an animal we cannot confirm is in the park', () => {
+  const page = boot();
+  const labels = page.read('WILDLIFE.map(square => square.label)');
+  for (const label of labels) {
+    for (const animal of UNCONFIRMED) {
+      assert.doesNotMatch(label.toLowerCase(), new RegExp(`\b${animal}\b`),
+        `"${label}" names ${animal}, which is not confirmed at Night Safari`);
+    }
+  }
+});
+
+test('every wildlife square is either a named resident or a sensory prompt', () => {
+  const page = boot();
+  const labels = page.read('WILDLIFE.map(square => square.label)');
+  const named = labels.filter(l => CONFIRMED_RESIDENTS.some(a => l.toLowerCase().includes(a)));
+  assert.ok(named.length >= 18, `expected plenty of named residents, got ${named.length}`);
+  assert.ok(labels.length - named.length >= 8,
+    'keep some sensory squares so the card is not purely a species checklist');
+});
+
+test('every square label fits a narrow phone', () => {
+  const page = boot();
+  const all = page.read('WILDLIFE.concat(TOGETHER).map(square => square.label)');
+  for (const label of all) {
+    assert.ok(label.length <= 32, `"${label}" is ${label.length} characters, over the 32 cap`);
+    const longest = label.split(/\s+/).reduce((a, w) => Math.max(a, w.length), 0);
+    assert.ok(longest <= 14, `"${label}" has a ${longest}-character word that will break badly`);
+  }
+});

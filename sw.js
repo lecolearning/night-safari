@@ -2,7 +2,7 @@
    The park has patchy signal, so everything is cached on first visit and
    served from the cache afterwards. Bump VERSION to ship an update. */
 
-const VERSION = 'ns-v8';
+const VERSION = 'ns-v9';
 const CORE = 'core-' + VERSION;
 const RUNTIME = 'runtime-' + VERSION;
 
