@@ -11,100 +11,6 @@ const CONFIG = {
   myVeg: 'carrot',
 };
 
-// Each animal mirrors the Veggie ID card: strengths, weakness, quotes, alignment, hidden talent, peer reviews.
-const ANIMALS = {
-  otter: {
-    name: 'Asian Small-clawed Otter', color: '#e9a35c',
-    tagline: 'Smallest otter in the world, loudest otter in the room',
-    strengths: ['Makes friends in under four seconds', 'Catches its snacks in its hands, like a very small person', 'Genuinely excited about snacks, every single time'],
-    weakness: ['Volume control is theoretical', 'Cannot pass a body of water without commentary', 'Will befriend the tram guide and forget the tram'],
-    quotes: ['"Wait wait wait, look at THAT"', '"Okay but are we getting dessert though"'],
-    alignment: 'Lawful 30%, Neutral 20%, Chaotic 50%<br>Good 100%, Neutral 0%, Evil 0%',
-    talent: 'Can turn any queue into a friend group',
-    peers: [['Otter once cheered so loudly for me that I forgot to be shy.', 'Pangolin'], ['Splashed me. Said sorry. Splashed me again.', 'Fishing Cat']],
-    fact: 'The smallest otter in the world. Its claws are so short and its fingers so nimble that it picks food up in its hands instead of its mouth.',
-    findme: 'Pangolin Trail',
-    compat: [98, "You would make friends with the entire tram. I would quietly find us the best supper afterwards. Excellent division of labour."],
-  },
-  dhole: {
-    name: 'Dhole (Asian Wild Dog)', color: '#e88a4c',
-    tagline: 'The golden retriever of the jungle. This is peer-reviewed.',
-    strengths: ["Greets everyone like they've been gone for years", 'Whistles instead of barking to find its friends in the dark', 'Loyal to a level that concerns biologists'],
-    weakness: ['Has never once said no to a plan', 'Runs toward things before knowing what they are', "Thinks 'we should all hang out' is a full sentence"],
-    quotes: ['"This is going to be SO fun" (it was)', '"I\'m not lost, I\'m exploring with confidence"'],
-    alignment: 'Lawful 60%, Neutral 25%, Chaotic 15%<br>Good 100%, Neutral 0%, Evil 0%',
-    talent: "Remembers the name of every dog they've ever met. Owners, less so.",
-    peers: [['Dhole ran across the whole park to bring me a snack I mentioned once. Once.', 'Slow Loris'], ['Whistled at me for ten minutes. I think it was a compliment.', 'Tiger']],
-    fact: 'Dhole packs let the pups eat first at a kill, which is the exact opposite of how a wolf pack does it.',
-    findme: 'Seen from the tram',
-    compat: [97, 'You say hello to everyone, I work out where we are going. Between us we would survive any jungle and most hawker centres.'],
-  },
-  loris: {
-    name: 'Sunda Slow Loris', color: '#c9ad83',
-    tagline: 'Big eyes, zero rush, secretly venomous (only if provoked)',
-    strengths: ['Notices everything, mentions it later', 'Calm in a way that calms other people', 'Arrives late and somehow exactly on time'],
-    weakness: ["'Five more minutes' is a lifestyle", 'Needs four minutes to choose a drink and will not be rushed on this', 'Cannot be hurried. Has been tested.'],
-    quotes: ['"I\'m coming, I\'m coming" (was not coming)', '"Wait, did you see that? No? Too late."'],
-    alignment: 'Lawful 55%, Neutral 40%, Chaotic 5%<br>Good 100%, Neutral 0%, Evil 0%',
-    talent: 'Finds the one comfortable spot in any room within a minute',
-    peers: [['Loris listened to me talk for an hour and remembered all of it.', 'Otter'], ['I watched them consider a leaf for four minutes. Respect.', 'Binturong']],
-    fact: 'One of the only venomous primates on Earth. It licks a gland inside its own elbow and mixes the oil with its saliva.',
-    findme: 'Pangolin Trail',
-    compat: [96, 'Two nocturnal creatures who refuse to be hurried. This safari is going to take us four hours. Worth every one.'],
-  },
-  pangolin: {
-    name: 'Sunda Pangolin', color: '#d9b26a',
-    tagline: 'Armoured outside, complete softie inside (also: not a hedgehog)',
-    strengths: ['Quietly the most caring one in the room', 'Unbothered by drama, is wearing armour', 'Will absolutely show up if you need them'],
-    weakness: ['Curls into a ball when a group photo is suggested', 'Takes a while to open up, then never stops', 'Has researched the tram timings, will not admit it'],
-    quotes: ['"I\'m fine" (is thinking about it)', '"Oh, I actually read about this..."'],
-    alignment: 'Lawful 75%, Neutral 20%, Chaotic 5%<br>Good 100%, Neutral 0%, Evil 0%',
-    talent: 'Remembers the small thing you said three weeks ago',
-    peers: [["Pangolin doesn't say much but somehow always has a plaster when I need one.", 'Dhole'], ['Rolled into a ball when I complimented them. Adorable. Concerning.', 'Otter']],
-    fact: "A pangolin pup rides around on the base of its mother's tail, and gets tucked safely inside when she curls into a ball.",
-    findme: 'Pangolin Trail',
-    compat: [97, 'One of us is armoured and one of us is waterproof. Statistically, very little can go wrong on Saturday.'],
-  },
-  fishingcat: {
-    name: 'Fishing Cat', color: '#a9b39a',
-    tagline: 'The cat that read the rules about water and said no',
-    strengths: ['Independent, a little mysterious, unexpectedly good at things', "Patient right up until it's time to pounce", 'Cool under pressure, warm under everything else'],
-    weakness: ["'I'll just do it myself' about literally everything", 'Has strong opinions about the correct snack', 'Will pause a conversation mid-sentence for a good otter sighting'],
-    quotes: ['"I didn\'t plan it, it just worked out" (planned it)', '"Hm. Interesting." (very interested)'],
-    alignment: 'Lawful 40%, Neutral 45%, Chaotic 15%<br>Good 100%, Neutral 0%, Evil 0%',
-    talent: 'Finds the best food stall within 200 metres of anywhere',
-    peers: [['Fishing Cat caught dinner in the time it took me to open the menu. Did not even look smug about it.', 'Slow Loris'], ['Caught a fish in front of me. Made eye contact. Ate it.', 'Otter']],
-    fact: 'A cat that dives. It swims underwater and has been seen snatching waterbirds from below the surface.',
-    findme: 'Pangolin Trail',
-    compat: [99, 'Two fishing cats. Both independent, both secretly delighted, both pretending we did not plan this. It worked out anyway.'],
-  },
-  tiger: {
-    name: 'Malayan Tiger', color: '#f0973a',
-    tagline: 'Main character energy, respectfully',
-    strengths: ['Walks in, room rearranges itself', 'Fiercely protective of their people', "Warm immediately, but somehow you still feel like you got the good seat"],
-    weakness: ['Sleeps sixteen hours a day if unsupervised', 'Has The Look. Uses it.', 'Will renegotiate a bad plan in real time, mid-plan'],
-    quotes: ['"I\'m not competitive" (is very competitive)', '"Okay, fine, that\'s actually cute"'],
-    alignment: 'Lawful 50%, Neutral 20%, Chaotic 30%<br>Good 100%, Neutral 0%, Evil 0%',
-    talent: 'Photographs well from every angle, including asleep',
-    peers: [["Tiger scared off someone who cut the queue for me. Didn't say anything. Just looked.", 'Pangolin'], ['Napped through my entire story. Woke up. Asked good follow-up questions.', 'Dhole']],
-    fact: 'No two tigers wear the same stripes. Not even the left and right sides of the same tiger match.',
-    findme: 'Seen from the tram',
-    compat: [98, 'Main character meets the one who quietly booked the tickets. Every good story has this pairing.'],
-  },
-  binturong: {
-    name: 'Binturong (Bearcat)', color: '#a898a0',
-    tagline: 'Smells like buttered popcorn. This is real science.',
-    strengths: ['Impossible to dislike, nobody can explain why', 'Chill to a degree that lowers nearby heart rates', 'Prehensile tail, which is honestly showing off'],
-    weakness: ['Has fallen asleep mid-sentence, twice', 'Smells like a cinema at 2pm on a Tuesday. Never explains why.', "Cannot pass a snack without a 'small taste'"],
-    quotes: ['"Wait, does anyone else smell popcorn?"', '"I\'m awake" (was not awake)'],
-    alignment: 'Lawful 35%, Neutral 55%, Chaotic 10%<br>Good 100%, Neutral 0%, Evil 0%',
-    talent: 'Can nap in any position, on any surface, at any brightness',
-    peers: [['Binturong hugged me once and I smelled like a cinema for a week. Ten out of ten.', 'Otter'], ['Once watched them fall asleep standing up. I timed it. Forty seconds.', 'Slow Loris']],
-    fact: 'Binturongs really do smell of hot buttered popcorn. Scientists tested 33 of them and found the exact compound that makes popcorn smell like popcorn. Nobody knows how they make it.',
-    findme: 'Pangolin Trail',
-    compat: [96, 'You smell like a cinema, I know where the good supper is. Movie night: solved.'],
-  },
-};
 
 // The story. Each beat has a scene, text, and choices. Choices either score animals (array) or set a plan key (object).
 const STORY = [
@@ -297,6 +203,7 @@ function result() {
   const A = ANIMALS[key];
   const M = ANIMALS[CONFIG.myAnimal];
   const [pct, line] = A.compat;
+  try { localStorage.setItem('ns_result', key); } catch (e) { /* private mode */ }
 
   const planItems = [
     ['🍽️', picks.food || 'Food: to be decided on the tram.'],
@@ -354,12 +261,6 @@ function result() {
       </div>
     </div>
 
-    <div class="card tilt-r">
-      <span class="tag lilac">Field notes, unedited</span>
-      <p>Thank you for playing along. Your vegetable quiz made me laugh for a full week, so I owed you one.</p>
-      <p>No pressure to actually be your animal on Saturday. Just come as you are. I will be the one who has already checked the tram timings.</p>
-    </div>
-
     <button class="sealed" id="sealed" onclick="openCase()">
       <span class="seal">✉</span>
       <b>CASE 002</b>
@@ -370,6 +271,7 @@ function result() {
     <div class="stack" style="margin-top:22px">
       <button class="btn coral" onclick="share()">Send my results to ${CONFIG.me}</button>
       <button class="btn mint" onclick="location.href='bingo.html'">Open the Night Safari bingo card</button>
+      <button class="btn lilac" onclick="location.href='pokedex.html'">Meet all seven animals</button>
       <button class="btn paper" onclick="location.href='plan.html'">Before you go: the practical bits</button>
       <button class="btn paper" onclick="location.reload()">Play again (animals are known to change their minds)</button>
     </div>
@@ -382,11 +284,34 @@ function result() {
   }, 400);
 }
 
+const SEAL_WARNINGS = [
+  ['That is a sealed case file.', 'Sealed means sealed. Please respect the process.'],
+  ['Still sealed.', 'I want you to know that sealing this took real effort.'],
+  ['You are extremely persistent.', 'Noted in your file, by the way. Under strengths.'],
+  ['Fine.', 'Opening under protest.'],
+];
+
 function openCase() {
   const el = document.getElementById('sealed');
   if (!el || el.dataset.open) return;
-  el.dataset.open = '1';
+  const taps = (+el.dataset.taps || 0) + 1;
+  el.dataset.taps = taps;
+
+  el.classList.remove('rattle');
+  void el.offsetWidth;
   el.classList.add('rattle');
+
+  if (taps <= SEAL_WARNINGS.length) {
+    const [head, sub] = SEAL_WARNINGS[taps - 1];
+    const note = el.querySelector('.sealnote');
+    const small = el.querySelector('.sealsmall');
+    if (note) note.textContent = head;
+    if (small) small.textContent = sub;
+    if (navigator.vibrate) navigator.vibrate(taps < SEAL_WARNINGS.length ? 30 : [40, 40, 90]);
+    return;
+  }
+
+  el.dataset.open = '1';
   setTimeout(() => {
     el.classList.remove('rattle');
     el.classList.add('opened');
