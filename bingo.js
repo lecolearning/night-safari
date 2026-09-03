@@ -14,6 +14,14 @@ const TOGETHER_PER_CARD = MOMENTS - WILDLIFE_PER_CARD;
 const LABEL_MAX = 32;                    // keeps every label on a narrow phone without ugly breaks
 const KEY = 'ns_bingo_v3';
 const OLD_KEYS = ['ns_bingo_v2', 'ns_bingo_v1']; // 5×5 saves; left untouched, never read into a 4×4 board
+const GATE_KEY = 'ns_bingo_unlocked';   // the card is sent ahead of the night, so it waits for a word
+const GATE_WORD = 'mirepoix';           // onion, carrot and celery — the three of them together
+const GATE_HINTS = [
+  'Not quite. It is a cooking word.',
+  'Think about what an onion and a carrot get up to in a pot.',
+  'Add celery. The French have a word for the three of them.',
+  'It begins with an M. That is the last hint you are getting.',
+];
 const PHOTO_KEY = 'ns_bingo_photos_v1';  // photos live apart, so a full album can never spoil a card
 const PHOTO_MAX_EDGE = 640;
 const PHOTO_QUALITY = 0.7;
@@ -611,6 +619,52 @@ function escapeHTML(value) {
 }
 function announce(message) { announcement.textContent = message; }
 
+function gateOpen() {
+  if (typeof GATE_OPEN !== 'undefined' && GATE_OPEN) return true;   // test harness
+  try { return localStorage.getItem(GATE_KEY) === '1'; } catch (error) { return false; }
+}
+function openGate() {
+  try { localStorage.setItem(GATE_KEY, '1'); } catch (error) { /* private mode: this visit only */ }
+}
+function normalise(word) {
+  return String(word == null ? '' : word).trim().toLowerCase().replace(/\s+/g, '');
+}
+let gateTries = 0;
+
+function showGate(message) {
+  app.innerHTML = `<div class="screen">
+    <div class="card tilt-l gate">
+      <span class="tape"></span>
+      <span class="tag">Sealed until Saturday</span>
+      <h1 class="pixel">One word</h1>
+      <p>The bingo card is for the night itself, so it is locked until then.</p>
+      <p class="gate-riddle">An onion and a carrot walk into a pot. They bring a friend.<br>
+        <b>What do you call the three of them together?</b></p>
+      <form class="gate-form" data-gate>
+        <label class="sr-only" for="gate-word">The word</label>
+        <input id="gate-word" name="word" type="text" autocomplete="off" autocapitalize="none"
+          spellcheck="false" placeholder="one word" aria-describedby="gate-msg">
+        <button class="btn" type="submit">Unlock</button>
+      </form>
+      <p class="gate-msg" id="gate-msg" role="status" aria-live="polite">${message ? escapeHTML(message) : ''}</p>
+    </div>
+  </div>`;
+  const field = app.querySelector('#gate-word');
+  if (field && field.focus) field.focus({ preventScroll: true });
+}
+
+function tryGate(word) {
+  if (normalise(word) === GATE_WORD) {
+    openGate();
+    announce('Unlocked. Your bingo card is ready.');
+    if (book.active) start(book.active); else pickWho();
+    return true;
+  }
+  gateTries += 1;
+  showGate(normalise(word) ? GATE_HINTS[Math.min(gateTries - 1, GATE_HINTS.length - 1)] : 'A word goes in the box.');
+  return false;
+}
+
 function pickWho() {
   app.innerHTML = `<div class="screen"><div class="card bingo-welcome">
     <span class="tape" aria-hidden="true"></span>
@@ -1054,12 +1108,20 @@ app.addEventListener('click', event => {
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && lightbox !== null) closePhoto();
 });
+app.addEventListener('submit', event => {
+  const form = event.target.closest('[data-gate]');
+  if (!form) return;
+  event.preventDefault();
+  const field = form.querySelector('input');
+  tryGate(field ? field.value : '');
+});
 // A failed image reveals its emoji fallback; never retry a broken URL.
 app.addEventListener('error', event => {
   if (event.target.matches('img[data-fallback]')) event.target.remove();
 }, true);
 
 const requestedPlayer = new URLSearchParams(location.search).get('who');
-if (NAMES.includes(requestedPlayer)) start(requestedPlayer);
+if (!gateOpen()) showGate('');
+else if (NAMES.includes(requestedPlayer)) start(requestedPlayer);
 else if (book.active) start(book.active);
 else pickWho();

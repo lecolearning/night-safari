@@ -1,0 +1,48 @@
+<!doctype html><meta charset=utf-8>
+<body style="margin:0;background:#fff;color:#000;font:14px monospace;padding:10px">
+<div id=out>running…</div>
+<script>
+const L=[];
+function frame(src,w){return new Promise(r=>{const f=document.createElement('iframe');
+ f.style.cssText='width:'+w+'px;height:760px;border:0;position:absolute;left:-9999px';
+ f.src=src;f.onload=()=>setTimeout(()=>r(f),1100);document.body.appendChild(f);});}
+function hit(f,x,y){const d=f.contentDocument;const el=d.elementFromPoint(x,y);
+ return el?(el.className&&el.className.baseVal!==undefined?el.className.baseVal:el.className)||el.tagName:'none';}
+(async()=>{
+ const f=await frame('index.html?result=otter',390); const d=f.contentDocument,w=f.contentWindow;
+ const m=d.querySelector('.moon'); const r=m.getBoundingClientRect();
+ L.push('moon rect: '+Math.round(r.left)+','+Math.round(r.top)+' '+Math.round(r.width)+'x'+Math.round(r.height));
+ L.push('moon fully on screen: '+(r.left>=0&&r.top>=0&&r.right<=390));
+ L.push('moon tap target >=44px: '+(r.width>=44&&r.height>=44));
+ L.push('elementFromPoint at moon centre: '+hit(f,r.left+r.width/2,r.top+r.height/2));
+ // click it 3x
+ for(let i=0;i<3;i++) m.click();
+ await new Promise(r2=>setTimeout(r2,200));
+ L.push('moon toast: '+JSON.stringify((d.querySelector('.toast')||{}).textContent||''));
+
+ // fireflies visible in front?
+ const flies=[...d.querySelectorAll('.firefly')];
+ L.push('fireflies: '+flies.length+' | in .sky-front: '+flies.filter(x=>x.closest('.sky-front')).length);
+ const fr=flies[0].getBoundingClientRect();
+ L.push('firefly z-order at its centre: '+hit(f,fr.left+fr.width/2,fr.top+fr.height/2));
+
+ // tap near a firefly over a card -> should catch
+ const fly=flies.find(x=>{const b=x.getBoundingClientRect();return b.top>200&&b.top<700&&b.left>40&&b.left<340;});
+ if(fly){const b=fly.getBoundingClientRect();
+  const ev=new w.MouseEvent('click',{bubbles:true,clientX:b.left+3,clientY:b.top+3});
+  (d.elementFromPoint(b.left+3,b.top+3)||d.body).dispatchEvent(ev);
+  await new Promise(r2=>setTimeout(r2,150));
+  L.push('firefly caught by tapping over a card: '+(fly.classList.contains('caught')));
+ } else L.push('firefly caught test: no suitable firefly');
+
+ // a tap on a real button must NOT catch a firefly
+ const btn=d.querySelector('.btn');
+ const before=d.querySelectorAll('.firefly.caught').length;
+ const bb=btn.getBoundingClientRect();
+ btn.dispatchEvent(new w.MouseEvent('click',{bubbles:true,clientX:bb.left+10,clientY:bb.top+10}));
+ await new Promise(r2=>setTimeout(r2,150));
+ L.push('button tap stole a firefly (want false): '+(d.querySelectorAll('.firefly.caught').length>before));
+
+ document.getElementById('out').innerHTML=L.map(x=>'<div>'+x+'</div>').join('');
+})();
+</script>

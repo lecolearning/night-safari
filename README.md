@@ -41,6 +41,14 @@ then save as WebP at quality 88 to 90. Prompts for generating more art are in
   `pangolin`, `fishingcat`, `tiger`, `binturong`.
 - `bingo.html?who=Onion` skips the player picker. Use whatever labels `config.js` is set to.
 
+## The bingo password
+
+`bingo.html` is locked behind one word, since the story is sent ahead of the night.
+The word is `mirepoix`: onion, carrot and celery. Matching ignores case and spaces,
+wrong guesses get four escalating hints, and the unlock is remembered per phone in
+`localStorage`. It is a soft lock for fun, not security: the word is in `bingo.js`
+and anyone reading the source can find it.
+
 ## Tests
 
 ```bash

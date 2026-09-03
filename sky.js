@@ -15,10 +15,17 @@
     sky.appendChild(s);
   }
 
+  // Front layer: things that must stay visible and reachable over the cards.
+  const front = document.createElement('div');
+  front.className = 'sky-front';
+
   const moon = document.createElement('div');
   moon.className = 'moon';
+  moon.setAttribute('role', 'button');
+  moon.setAttribute('tabindex', '0');
+  moon.setAttribute('aria-label', 'The moon');
   moon.innerHTML = '<span class="face">˙ᵕ˙</span>';
-  sky.appendChild(moon);
+  front.appendChild(moon);
 
   for (let i = 0; i < 16; i++) {
     const f = document.createElement('i');
@@ -32,7 +39,7 @@
       f.style.setProperty('--x' + k, rnd(-60, 60) + 'px');
       f.style.setProperty('--y' + k, rnd(-50, 50) + 'px');
     }
-    sky.appendChild(f);
+    front.appendChild(f);
   }
 
   const trees = document.createElement('div');
@@ -47,6 +54,7 @@
   sky.appendChild(eyes);
 
   document.body.prepend(sky);
+  document.body.appendChild(front);
 })();
 
 // Tiny toast helper shared by both pages.
@@ -67,8 +75,6 @@ window.toast = function (msg) {
 (function easterEggs() {
   const css = document.createElement('style');
   css.textContent = `
-    .moon{pointer-events:auto;cursor:pointer}
-    .firefly{pointer-events:auto;cursor:pointer}
     .firefly.caught{animation:none!important;opacity:1;background:#fff;
       box-shadow:0 0 22px 10px rgba(255,240,180,.95);transform:scale(1.7)}
     .egg-rain{position:fixed;top:-40px;z-index:6;pointer-events:none;font-size:26px;
@@ -89,7 +95,7 @@ window.toast = function (msg) {
   const moon = document.querySelector('.moon');
   if (moon) {
     moon.setAttribute('title', '');
-    moon.addEventListener('click', () => {
+    const tapMoon = () => {
       moonTaps++;
       const face = moon.querySelector('.face');
       if (face) {
@@ -101,14 +107,35 @@ window.toast = function (msg) {
       if (moonTaps >= 3 && window.toast) {
         window.toast(NOTES[Math.min(moonTaps - 3, NOTES.length - 1)]);
       }
+    };
+    moon.addEventListener('click', tapMoon);
+    moon.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapMoon(); }
     });
   }
 
   /* --- 2. catch all seven fireflies --- */
   const flies = [...document.querySelectorAll('.firefly')];
   let caught = 0;
-  flies.forEach((f) => {
-    f.addEventListener('click', () => {
+  const INTERACTIVE = 'a,button,input,textarea,select,label,summary,[role="button"],[onclick]';
+  const HIT = 26;   // a fingertip, not a 7px dot
+
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) return;
+    const x = e.clientX, y = e.clientY;
+    if (x === undefined || (x === 0 && y === 0)) return;   // keyboard-driven click
+    let best = null, bestD = HIT;
+    for (const f of flies) {
+      if (f.classList.contains('caught')) continue;
+      const r = f.getBoundingClientRect();
+      if (!r.width) continue;
+      const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (d < bestD) { bestD = d; best = f; }
+    }
+    if (best) catchFly(best);
+  }, true);
+
+  function catchFly(f) {
       if (f.classList.contains('caught')) return;
       f.classList.add('caught');
       caught++;
@@ -120,8 +147,7 @@ window.toast = function (msg) {
         flies.forEach((x, i) => setTimeout(() => x.classList.remove('caught'), 900 + i * 120));
         caught = 0;
       }
-    });
-  });
+  }
 
   /* --- 3. type a certain vegetable --- */
   const WORDS = { onion: ['🧅', 'I knew it.'], carrot: ['🥕', 'Rooting for you.'] };

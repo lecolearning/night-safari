@@ -33,15 +33,25 @@ p{line-height:1.55;margin:0 0 12px}
 
 /* ---------- sky ---------- */
 .sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+/* Fireflies and the moon live in front of the cards, otherwise a phone-width
+   card hides them completely. The layer itself never takes a tap; taps are
+   hit-tested in sky.js so a real button always wins. */
+.sky-front{position:fixed;inset:0;z-index:3;pointer-events:none;overflow:hidden}
 .star{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;opacity:.6;animation:twinkle var(--d,3s) ease-in-out infinite}
 @keyframes twinkle{0%,100%{opacity:.15;transform:scale(1)}50%{opacity:.9;transform:scale(1.5)}}
-.moon{position:absolute;top:-14px;right:-12px;width:64px;height:64px;border-radius:50%;
-  background:radial-gradient(circle at 35% 35%,#fff9e3,#ffe9a8 60%,#f4d27a);
-  box-shadow:0 0 44px 14px rgba(255,225,150,.22)}
-.moon::before{content:"";position:absolute;top:-8px;right:-10px;width:60px;height:60px;border-radius:50%;background:#0b1029}
-.moon .face{position:absolute;left:16px;top:26px;font-size:14px;color:#b88a2a;letter-spacing:6px}
-.firefly{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--gold);
-  box-shadow:0 0 10px 3px rgba(255,209,102,.8);opacity:0;
+.moon{position:fixed;top:10px;right:10px;width:52px;height:52px;border-radius:50%;
+  background:radial-gradient(circle at 35% 32%,#fff9e3,#ffe9a8 62%,#f0c96a);
+  border:2px solid #2b2340;
+  box-shadow:0 0 0 6px rgba(255,225,150,.16),0 0 26px 8px rgba(255,214,120,.45),3px 4px 0 rgba(0,0,0,.28);
+  pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  display:flex;align-items:center;justify-content:center;
+  animation:moonGlow 4.5s ease-in-out infinite}
+@keyframes moonGlow{0%,100%{box-shadow:0 0 0 6px rgba(255,225,150,.14),0 0 22px 6px rgba(255,214,120,.38),3px 4px 0 rgba(0,0,0,.28)}
+  50%{box-shadow:0 0 0 9px rgba(255,225,150,.20),0 0 30px 11px rgba(255,214,120,.55),3px 4px 0 rgba(0,0,0,.28)}}
+@media (prefers-reduced-motion:reduce){.moon{animation:none}}
+.moon .face{font-size:15px;line-height:1;color:#8a6420;letter-spacing:2px;transform:translateY(2px)}
+.firefly{position:absolute;width:7px;height:7px;border-radius:50%;background:#ffd166;
+  box-shadow:0 0 10px 4px rgba(255,196,64,.85),0 0 0 1.5px rgba(120,80,10,.35);opacity:0;
   animation:drift var(--t,12s) ease-in-out infinite,glow var(--g,2.6s) ease-in-out infinite;animation-delay:var(--dl,0s)}
 @keyframes drift{0%{transform:translate(0,0)}25%{transform:translate(var(--x1),var(--y1))}50%{transform:translate(var(--x2),var(--y2))}75%{transform:translate(var(--x3),var(--y3))}100%{transform:translate(0,0)}}
 @keyframes glow{0%,100%{opacity:0}40%{opacity:1}60%{opacity:.9}}
@@ -358,3 +368,14 @@ img.scene{object-fit:cover}
 .evidence figure:nth-child(even){transform:rotate(1.4deg)}
 .evidence img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px}
 .evidence figcaption{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);text-align:center;margin-top:4px}
+
+/* ---------- bingo password gate ---------- */
+.gate-riddle{background:#fff;border:1.5px dashed rgba(43,35,64,.35);border-radius:14px;
+  padding:12px 14px;font-size:15px;line-height:1.5;margin:14px 0}
+.gate-form{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.gate-form input{font:inherit;font-weight:700;font-size:17px;text-align:center;color:var(--ink);
+  background:#fff;border:var(--border);border-radius:14px;padding:13px 12px;width:100%;
+  box-shadow:inset 2px 3px 0 rgba(0,0,0,.08)}
+.gate-form input:focus{outline:3px solid var(--gold);outline-offset:2px}
+.gate-msg{min-height:1.3em;margin:10px 0 0;font-size:14px;font-weight:700;color:#a8442f;text-align:center}
+.gate-msg:empty{margin:0}

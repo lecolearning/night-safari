@@ -27,7 +27,8 @@ function quotaError() {
 // Minimal DOM boundary: exercise the real script, event handlers and rendered HTML
 // without a browser dependency. These tests do not claim to measure browser layout.
 function boot({ search = '', stored = new Map(), storageDenied = false, fullKeys = [],
-  reducedMotion = true, confirmResult = false, people = { players: ['Ace', 'Bee'] } } = {}) {
+  reducedMotion = true, confirmResult = false, people = { players: ['Ace', 'Bee'] },
+  gateOpen = true } = {}) {
   const listeners = {};
   const docListeners = {};
   const focused = [];
@@ -45,6 +46,7 @@ function boot({ search = '', stored = new Map(), storageDenied = false, fullKeys
     },
   };
   const context = vm.createContext({
+    GATE_OPEN: gateOpen,
     ...(people ? { PEOPLE: people } : {}),
     URLSearchParams,
     location: { search },
@@ -1237,4 +1239,60 @@ test('a malformed PEOPLE is ignored rather than breaking the board', () => {
     assert.deepEqual(page.read('NAMES'), ['One', 'Two'],
       `NAMES should fall back for ${JSON.stringify(bad)}`);
   }
+});
+
+// ---------- the password gate ----------
+
+test('a locked card shows the riddle and no board', () => {
+  const page = boot({ gateOpen: false });
+  assert.match(page.app.innerHTML, /One word/, 'the gate screen should be shown');
+  assert.match(page.app.innerHTML, /data-gate/, 'the gate form should be present');
+  assert.doesNotMatch(page.app.innerHTML, /dex-grid|data-cell/, 'no board before unlocking');
+  assert.doesNotMatch(page.app.innerHTML, /mirepoix/i, 'the answer must not be in the DOM');
+});
+
+test('the right word unlocks, and is remembered', () => {
+  const stored = new Map();
+  const page = boot({ gateOpen: false, stored });
+  assert.equal(page.read("tryGate('mirepoix')"), true, 'the word should be accepted');
+  assert.equal(stored.get('ns_bingo_unlocked'), '1', 'the unlock should be written to storage');
+  assert.match(page.app.innerHTML, /data-player/, 'the player picker should follow');
+});
+
+test('the word is forgiving about case and stray spaces', () => {
+  for (const word of ['Mirepoix', '  MIREPOIX  ', 'mire poix', 'MirePoix']) {
+    const page = boot({ gateOpen: false });
+    assert.equal(page.read(`tryGate(${JSON.stringify(word)})`), true, `${word} should be accepted`);
+  }
+});
+
+test('a wrong word gives escalating hints and never the answer', () => {
+  const page = boot({ gateOpen: false });
+  const seen = [];
+  for (let i = 0; i < 5; i++) {
+    assert.equal(page.read("tryGate('celery')"), false, 'a wrong word should be refused');
+    seen.push(page.app.innerHTML);
+  }
+  assert.ok(seen[0] !== seen[1], 'the hint should change on the second try');
+  for (const html of seen) {
+    assert.doesNotMatch(html, /mirepoix/i, 'no hint may contain the answer');
+  }
+  assert.match(seen[seen.length - 1], /begins with an M/, 'the last hint should still be a hint');
+});
+
+test('an empty answer asks for a word rather than counting as a miss', () => {
+  const page = boot({ gateOpen: false });
+  page.read("tryGate('   ')");
+  assert.match(page.app.innerHTML, /A word goes in the box/, 'empty input should prompt, not scold');
+});
+
+test('an unlocked phone goes straight to the card', () => {
+  const stored = new Map([['ns_bingo_unlocked', '1']]);
+  const page = boot({ gateOpen: false, stored });
+  assert.doesNotMatch(page.app.innerHTML, /One word/, 'a remembered unlock should skip the gate');
+});
+
+test('the gate still opens when storage is denied, for this visit', () => {
+  const page = boot({ gateOpen: false, storageDenied: true });
+  assert.equal(page.read("tryGate('mirepoix')"), true, 'a private window should still get in');
 });
