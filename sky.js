@@ -1,4 +1,15 @@
 // Night sky: stars, a moon, fireflies, a treeline and a pair of eyes that peek out now and then.
+//
+// Fireflies start in the front layer so they can be seen and caught over the
+// cards. Once all seven have been caught, they retire to the background layer
+// and are simply scenery from then on.
+const FLIES_KEY = 'ns_flies_caught';
+function fliesRetired() {
+  try { return localStorage.getItem(FLIES_KEY) === '1'; } catch (e) { return false; }
+}
+function retireFlies() {
+  try { localStorage.setItem(FLIES_KEY, '1'); } catch (e) { /* private mode: this visit only */ }
+}
 (function () {
   const sky = document.createElement('div');
   sky.className = 'sky';
@@ -39,7 +50,7 @@
       f.style.setProperty('--x' + k, rnd(-60, 60) + 'px');
       f.style.setProperty('--y' + k, rnd(-50, 50) + 'px');
     }
-    front.appendChild(f);
+    (fliesRetired() ? sky : front).appendChild(f);
   }
 
   const trees = document.createElement('div');
@@ -117,10 +128,21 @@ window.toast = function (msg) {
   /* --- 2. catch all seven fireflies --- */
   const flies = [...document.querySelectorAll('.firefly')];
   let caught = 0;
+  const bg = document.querySelector('.sky');
+
+  // Send them back behind the cards, where they are only scenery.
+  function sendFliesHome() {
+    retireFlies();
+    flies.forEach((f, i) => setTimeout(() => {
+      f.classList.remove('caught');
+      if (bg) bg.appendChild(f);
+    }, 900 + i * 110));
+  }
   const INTERACTIVE = 'a,button,input,textarea,select,label,summary,[role="button"],[onclick]';
   const HIT = 26;   // a fingertip, not a 7px dot
 
   document.addEventListener('click', (e) => {
+    if (fliesRetired()) return;            // the egg is spent; they are scenery now
     if (e.target && e.target.closest && e.target.closest(INTERACTIVE)) return;
     const x = e.clientX, y = e.clientY;
     if (x === undefined || (x === 0 && y === 0)) return;   // keyboard-driven click
@@ -142,9 +164,9 @@ window.toast = function (msg) {
       if (navigator.vibrate) navigator.vibrate(18);
       if (caught === 1 && window.toast) window.toast('Caught one. ✨');
       else if (caught === 3 && window.toast) window.toast('Three. Keep going.');
-      else if (caught === 7 && window.toast) {
-        window.toast('Seven caught. One for each animal. 🔎');
-        flies.forEach((x, i) => setTimeout(() => x.classList.remove('caught'), 900 + i * 120));
+      else if (caught === 7) {
+        if (window.toast) window.toast('Seven caught. One for each animal. Letting them go. 🔎');
+        sendFliesHome();
         caught = 0;
       }
   }
