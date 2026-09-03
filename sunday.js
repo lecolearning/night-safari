@@ -1,7 +1,8 @@
 /* Case 002 — the morning after. Reads whatever the bingo card saved on this
    phone and shows it back as "evidence". Everything stays local. */
 
-const CONFIG = { her: 'XJ', me: 'YA' };
+// Names come from config.js.
+const CONFIG = { her: PEOPLE.her, me: PEOPLE.me };
 const app = document.getElementById('app');
 
 /* ---------- read the bingo leftovers, defensively ---------- */
@@ -38,7 +39,7 @@ function collect(node, out, depth) {
   for (const [k, v] of Object.entries(node)) {
     if (typeof v === 'string' && v.startsWith('data:image/')) {
       if (!out.photos.includes(v)) out.photos.push(v);
-    } else if (typeof v === 'string' && /^(XJ|YA)$/i.test(v) && /who|player|name/i.test(k)) {
+    } else if (typeof v === 'string' && PEOPLE.players.some((n) => n.toLowerCase() === v.toLowerCase()) && /who|player|name/i.test(k)) {
       out.player = v;
     } else {
       collect(v, out, depth + 1);
@@ -95,8 +96,8 @@ app.innerHTML = `
 `;
 
 async function reply(text) {
-  const msg = `${text} 🔎 — ${CONFIG.her}`;
+  const msg = NAMES_ON ? `${text} 🔎 — ${CONFIG.her}` : `${text} 🔎`;
   try { if (navigator.share) { await navigator.share({ text: msg }); return; } } catch (e) { /* cancelled */ }
-  try { await navigator.clipboard.writeText(msg); toast('Copied. Send it to ' + CONFIG.me + ' 🐾'); }
+  try { await navigator.clipboard.writeText(msg); toast(PEOPLE.copied); }
   catch (e) { prompt('Copy this:', msg); }
 }

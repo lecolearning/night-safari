@@ -3,12 +3,13 @@
    Edit CONFIG, ANIMALS and STORY freely. Everything else renders.
    ============================================================ */
 
+// Names come from config.js. Flip NAMES_ON there to switch them on or off.
 const CONFIG = {
-  her: 'XJ',
-  me: 'YA',
-  myAnimal: 'fishingcat',     // YA's result. Change it if you take the quiz and get something else.
-  herVeg: 'onion',
-  myVeg: 'carrot',
+  her: PEOPLE.her,
+  me: PEOPLE.me,
+  myAnimal: 'fishingcat',     // his result. Change it if he takes the quiz and gets something else.
+  herVeg: PEOPLE.herVeg,
+  myVeg: PEOPLE.meVeg,
 };
 
 
@@ -150,7 +151,7 @@ function intro() {
       <p>You have been peer-reviewed as an <b>onion</b>. Respectable. Extroverted, loyal, gets back up no matter the fall.</p>
       <p>Unfortunately the Night Safari does not admit vegetables. A second opinion is required, and the animals have agreed to help.</p>
       <p class="small muted">One evening, eleven choices, one animal. Results are final and scientifically binding.</p>
-      <div class="byline">Conducted by ${CONFIG.me}, certified carrot, on behalf of ${CONFIG.her}.</div>
+      <div class="byline">${PEOPLE.byline}</div>
       <p class="small muted" style="padding:0 4px">For the record, carrots are root vegetables. I am rooting for Saturday.</p>
     </div>
     <div class="stack" style="margin-top:22px"><button class="btn" onclick="ask()">Start</button></div>
@@ -211,7 +212,7 @@ function result() {
     ['🌶️', picks.spice || 'Spice: negotiable.'],
   ];
   window._shareText =
-    `🌙 Night Safari Adventure\n${CONFIG.her} is a ${A.name}!\n` +
+    `🌙 Night Safari Adventure\n${PEOPLE.subjectIs(A.name)}!\n` +
     `Compatibility with a ${M.name}: ${pct}%\n` +
     `Plan: ${planItems.map((p) => p[1]).join(' · ')}\n` +
     `Mission: find both animals. Whoever finds theirs first gets dessert bought by the other. 🐾`;
@@ -239,9 +240,9 @@ function result() {
     <div class="card peach tilt-r">
       <span class="tag lilac">Compatibility report</span>
       <div class="duo">
-        <div class="who"><span class="em">${ART.portrait(key)}</span><div class="nm">${CONFIG.her}</div><div class="an">${A.name}<br>(formerly ${CONFIG.herVeg})</div></div>
+        <div class="who"><span class="em">${ART.portrait(key)}</span><div class="nm">${CONFIG.her}</div><div class="an">${A.name}${PEOPLE.formerly(CONFIG.herVeg)}</div></div>
         <div class="heart">💛</div>
-        <div class="who"><span class="em">${ART.portrait(CONFIG.myAnimal)}</span><div class="nm">${CONFIG.me}</div><div class="an">${M.name}<br>(formerly ${CONFIG.myVeg})</div></div>
+        <div class="who"><span class="em">${ART.portrait(CONFIG.myAnimal)}</span><div class="nm">${CONFIG.me}</div><div class="an">${M.name}${PEOPLE.formerly(CONFIG.myVeg)}</div></div>
       </div>
       <div class="meter"><b id="meter"></b></div>
       <div class="pct pixel" id="pct">0%</div>
@@ -269,7 +270,7 @@ function result() {
     </button>
 
     <div class="stack" style="margin-top:22px">
-      <button class="btn coral" onclick="share()">Send my results to ${CONFIG.me}</button>
+      <button class="btn coral" onclick="share()">${PEOPLE.sendResults}</button>
       <button class="btn mint" onclick="location.href='bingo.html'">Open the Night Safari bingo card</button>
       <button class="btn lilac" onclick="location.href='pokedex.html'">Meet all seven animals</button>
       <button class="btn paper" onclick="location.href='plan.html'">Before you go: the practical bits</button>
@@ -327,7 +328,7 @@ function openCase() {
 async function share() {
   const text = window._shareText;
   try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { /* cancelled */ }
-  try { await navigator.clipboard.writeText(text); toast('Copied! Paste it to ' + CONFIG.me + ' 🐾'); }
+  try { await navigator.clipboard.writeText(text); toast(PEOPLE.copied); }
   catch (e) { prompt('Copy this:', text); }
 }
 
