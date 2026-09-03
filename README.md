@@ -14,6 +14,9 @@ Static site. No build step, no dependencies. Live at
 | `plan.html` | Before you go: park times, transport, what to wear. Static HTML, no JS. |
 | `bingo.html` + `bingo.js` | The bingo card for the walk. Each phone keeps its own card in localStorage. |
 | `sunday.html` + `sunday.js` | Case 002, to send the morning after. Reads the bingo photos off the phone and shows them back as evidence. |
+| `pokedex.html` + `pokedex.js` + `pokedex.css` | The nocturnal seven: collectible cards, detail files, synthesised animal calls, and a locked No. 008. |
+| `config.js` | Who the site is for. `NAMES_ON` switches real names on or off site-wide. This is the only file that holds them. |
+| `animals.js` | The seven animals, shared by the story and the Pokedex. |
 | `art.js` + `img/` | Artwork. WebP characters and scenes, with inline SVG fallbacks if WebP fails. |
 | `sky.js` | Stars, moon, fireflies, treeline. |
 | `sw.js` + `manifest.webmanifest` | Offline support and add-to-home-screen. |
@@ -36,7 +39,7 @@ then save as WebP at quality 88 to 90. Prompts for generating more art are in
 - `index.html?step=4` jumps into the story at beat 4.
 - `index.html?result=otter` shows a result card. Valid: `otter`, `dhole`, `loris`,
   `pangolin`, `fishingcat`, `tiger`, `binturong`.
-- `bingo.html?who=XJ` skips the player picker.
+- `bingo.html?who=Onion` skips the player picker. Use whatever labels `config.js` is set to.
 
 ## Tests
 

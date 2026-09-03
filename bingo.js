@@ -4,7 +4,7 @@
 // for the test harness, which runs this file without config.js.
 const NAMES = (typeof PEOPLE !== 'undefined' && Array.isArray(PEOPLE.players) && PEOPLE.players.length === 2)
   ? PEOPLE.players.slice()
-  : ['XJ', 'YA'];
+  : ['One', 'Two'];
 const SIZE = 4;                          // four across, four down
 const CELLS = SIZE * SIZE;               // sixteen squares
 const FREE_INDEX = 5;                    // row 2, column 2 — sits on the ↘ diagonal

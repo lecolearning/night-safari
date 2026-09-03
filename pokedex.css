@@ -50,7 +50,7 @@
 .dex-status{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#8b8299}
 .dex-card.is-met .dex-status{color:#2f7a58}
 
-/* ---------- badges: YA's fishing cat, XJ's result ---------- */
+/* ---------- badges: his fishing cat, her quiz result ---------- */
 .dex-badges{position:absolute;top:-9px;right:-5px;display:flex;gap:4px;z-index:2}
 .dex-badge{font-size:9.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);
   background:var(--mint);border:2px solid var(--ink);border-radius:999px;padding:2px 7px;

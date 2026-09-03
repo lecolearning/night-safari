@@ -30,8 +30,8 @@
   };
   /* Names follow config.js, so the aliases stay on when NAMES_ON is false. */
   const PEOPLE = window.PEOPLE || {};
-  const HIM = PEOPLE.me || 'YA';
-  const HER = PEOPLE.her || 'XJ';
+  const HIM = PEOPLE.me || 'Carrot';
+  const HER = PEOPLE.her || 'Onion';
   const HIS_KEY = 'fishingcat';   // his animal, same as CONFIG.myAnimal in quiz.js
 
   /* Her animal comes from the story. Missing, unreadable or unknown is fine:
