@@ -175,13 +175,14 @@
 /* ---------- the little moment when one fills in ---------- */
 .dex-file.is-revealing{animation:dexReveal .55s cubic-bezier(.2,.9,.3,1.25)}
 .dex-file.is-revealing .dex-bigpic .art{animation:dexUnshade .85s ease-out}
-.dex-file.is-revealing .idhead{position:relative}
-.dex-file.is-revealing .idhead::after{content:"\2728";position:absolute;left:50%;top:6px;font-size:26px;
-  pointer-events:none;animation:dexSpark 1.2s ease-out forwards}
+.dex-file.is-revealing .dex-bigpic{position:relative}
+.dex-file.is-revealing .dex-bigpic::after{content:"\2728";position:absolute;right:-10px;top:-14px;
+  font-size:30px;line-height:1;pointer-events:none;animation:dexSpark 1.2s ease-out forwards}
 @keyframes dexReveal{0%{transform:scale(.94);opacity:.5}55%{transform:scale(1.02)}100%{transform:none;opacity:1}}
 @keyframes dexUnshade{0%{filter:brightness(0) opacity(.55)}60%{filter:brightness(.35) opacity(.85)}100%{filter:none}}
-@keyframes dexSpark{0%{opacity:0;transform:translate(-50%,12px) scale(.5)}
-  30%{opacity:1}100%{opacity:0;transform:translate(-50%,-26px) scale(1.35)}}
+@keyframes dexSpark{0%{opacity:0;transform:scale(.4) rotate(-14deg)}
+  28%{opacity:1;transform:scale(1.15) rotate(0deg)}
+  100%{opacity:0;transform:translateY(-14px) scale(1.4) rotate(12deg)}}
 @media (prefers-reduced-motion:reduce){
-  .dex-file.is-revealing .idhead::after{opacity:0}
+  .dex-file.is-revealing .dex-bigpic::after{opacity:0}
 }

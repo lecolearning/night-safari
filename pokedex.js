@@ -462,7 +462,8 @@
     }
     let line;
     if (!left) {
-      line = '<b>All ' + N + '</b> met. ' + who + 'The whole set, in one evening. '
+      line = '<b>All ' + N + '</b> met. The whole set, in one evening. '
+        + (HER_KEY ? who : her + '’s badge is still waiting on the quiz, but the cards are all yours. ')
         + 'Nothing left to find, which is the only sad thing about it.';
     } else {
       line = '<b>' + n + ' of ' + N + '</b> met so far. ' + who

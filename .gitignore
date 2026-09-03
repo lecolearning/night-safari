@@ -14,3 +14,5 @@ Thumbs.db
 .frame.html
 _dex*.html
 _tmp*.html
+node_modules/
+package-lock.json
