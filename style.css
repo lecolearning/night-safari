@@ -190,7 +190,7 @@ footer.credit a{color:var(--lilac)}
 /* Four columns: wider squares, so labels break kindly instead of mid-word. */
 .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:14px 0;width:100%}
 .cell-wrap{position:relative;display:flex;min-width:0}
-.cell{position:relative;width:100%;min-height:124px;min-width:0;overflow-wrap:break-word;border-radius:13px 11px 14px 12px / 12px 14px 11px 13px;background:#fff;border:var(--border);border-bottom:5px solid #dd8eaa;padding:14px 5px 16px;
+.cell{position:relative;width:100%;min-height:128px;min-width:0;overflow-wrap:break-word;border-radius:13px 11px 14px 12px / 12px 14px 11px 13px;background:#fff;border:var(--border);border-bottom:5px solid #dd8eaa;padding:14px 5px 18px;
   font-size:clamp(11px,2.9vw,13px);font-weight:800;line-height:1.25;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
   cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;transition:background .2s;color:var(--ink);font-family:inherit;appearance:none;box-shadow:2px 2px 0 rgba(0,0,0,.2)}
 .cell[data-kind=wildlife]{border-bottom-color:#75bfa2}
@@ -270,7 +270,7 @@ footer.credit a{color:var(--lilac)}
   .bingo-page .wrap{padding-left:10px;padding-right:10px}
   .bingo-card{padding-left:8px;padding-right:8px}
   .grid{gap:5px}
-  .cell{padding-left:2px;padding-right:2px;min-height:128px}
+  .cell{padding-left:2px;padding-right:2px;padding-bottom:20px;min-height:134px}
   .bingo-icon{width:30px;height:30px;flex-basis:30px;font-size:22px}
   .cell-photo-btn{width:28px;height:28px;right:2px;bottom:2px}
   .bingo-card-top{gap:6px}

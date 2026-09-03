@@ -299,8 +299,9 @@ function cellHTML(cell, i, winCells) {
   const free = i === FREE_INDEX;
   const label = escapeHTML(cell.label);
   const position = `Row ${Math.floor(i / SIZE) + 1}, column ${i % SIZE + 1}`;
+  const classes = ['cell', state.on[i] && 'on', free && 'free', winCells.has(i) && 'win', photo && 'has-photo'];
   return `<div class="cell-wrap">
-    <button type="button" class="cell ${state.on[i] ? 'on' : ''} ${free ? 'free' : ''} ${winCells.has(i) ? 'win' : ''} ${photo ? 'has-photo' : ''}"
+    <button type="button" class="${classes.filter(Boolean).join(' ')}"
       data-cell="${i}" data-kind="${cell.kind}" aria-pressed="${state.on[i]}" ${free ? 'aria-disabled="true"' : ''}
       aria-label="${label}${free ? '. Free square, always marked' : ''}${photo ? '. Has a photo' : ''}. ${position}">
       ${photo ? `<img class="cell-photo" src="${escapeHTML(photo)}" alt="" aria-hidden="true">` : ''}
@@ -334,7 +335,9 @@ function lightboxHTML() {
 function summaryHTML() {
   const { count, wins } = getProgress(state);
   const photos = photoCount(state.who);
-  const marked = state.cells.map((cell, i) => ({ cell, i })).filter(({ i }) => state.on[i] && i !== FREE_INDEX);
+  // Worth listing if it was ticked, or if it was worth a photo even without a tick.
+  const marked = state.cells.map((cell, i) => ({ cell, i }))
+    .filter(({ i }) => (state.on[i] && i !== FREE_INDEX) || photoOf(state.who, i));
   return `<div class="bingo-board">
     <header class="bingo-page-head"><span class="bingo-eyebrow">The end of the evening</span>
       <h1 id="bingo-heading" tabindex="-1">${state.who}’s little collection</h1>
@@ -468,7 +471,13 @@ function pickPhoto(index) {
 function attachPhoto(index, file) {
   const who = state.who;
   const label = state.cells[index].label;
-  const refresh = () => { if (state && state.who === who && view === 'board') render(); };
+  const refresh = () => {
+    if (!state || state.who !== who || view !== 'board') return;
+    render();
+    // The grid was rebuilt, so put focus back on the square they were just working on.
+    const button = app.querySelector(`[data-view-photo="${index}"], [data-photo="${index}"]`);
+    if (button) button.focus({ preventScroll: true });
+  };
   return downscale(file).then(dataURL => {
     const result = setPhoto(who, index, dataURL);
     if (result.ok) {
