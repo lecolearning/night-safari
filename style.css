@@ -273,3 +273,26 @@ h1.pixel{font-size:clamp(30px,8.6vw,46px);font-weight:700}
 
 .portrait-img{object-fit:contain;background:#fff}
 img.scene{object-fit:cover}
+
+/* ---------- sealed case file ---------- */
+.sealed{display:block;width:100%;margin-top:16px;text-align:center;cursor:pointer;font:inherit;color:#f4efe6;
+  background:linear-gradient(160deg,#241c3f,#141029);border:2px dashed rgba(255,207,92,.55);border-radius:var(--wob);
+  padding:22px 18px;box-shadow:var(--lift);transition:transform .15s,box-shadow .15s}
+.sealed:active{transform:translate(3px,4px);box-shadow:1px 1px 0 rgba(0,0,0,.35)}
+.sealed .seal{display:block;font-size:38px;line-height:1;margin-bottom:8px;filter:drop-shadow(0 0 12px rgba(255,207,92,.5))}
+.sealed b{display:block;font-family:'Fredoka',sans-serif;font-weight:700;font-size:clamp(24px,7vw,32px);letter-spacing:4px;color:var(--gold)}
+.sealnote{display:block;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#bdb4d8;margin-top:6px}
+.sealsmall{display:block;font-size:12.5px;color:#8f87ad;margin-top:10px;font-style:italic}
+.sealed.opened{cursor:default;text-align:left;border-style:solid;border-color:rgba(255,207,92,.35);animation:rise .5s both}
+.sealed.opened p{color:#e8e2f5;font-size:15px;line-height:1.55}
+.sealed.opened .tag{margin-bottom:10px}
+.sealed.rattle{animation:rattle .6s}
+@keyframes rattle{0%,100%{transform:none}15%{transform:translateX(-5px) rotate(-1deg)}30%{transform:translateX(5px) rotate(1deg)}45%{transform:translateX(-4px)}60%{transform:translateX(4px)}80%{transform:translateX(-2px)}}
+@media (prefers-reduced-motion:reduce){.sealed.rattle{animation:none}}
+
+/* ---------- Case 002 evidence gallery ---------- */
+.evidence{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-top:12px}
+.evidence figure{margin:0;background:#fff;border:var(--border);border-radius:10px;padding:6px 6px 4px;box-shadow:2px 3px 0 rgba(0,0,0,.25);transform:rotate(-1.2deg)}
+.evidence figure:nth-child(even){transform:rotate(1.4deg)}
+.evidence img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px}
+.evidence figcaption{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);text-align:center;margin-top:4px}

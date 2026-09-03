@@ -7,6 +7,7 @@
 <meta name="description" content="A little Night Safari bingo card for XJ and YA. Furry faces, terrible puns, and memories together.">
 <title>Little Moments Bingo · XJ &amp; YA</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐾</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="bingo-page">
@@ -18,5 +19,10 @@
 </main>
 <script src="sky.js"></script>
 <script src="bingo.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
 </body>
 </html>
