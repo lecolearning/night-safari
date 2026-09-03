@@ -159,7 +159,7 @@
 
   const portrait = (key) => BODY[key]
     ? `<svg viewBox="0 0 200 200" class="art" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>${FILTER}</defs>${G(BODY[key])}</svg>`
-    : `<span class="art portrait-fallback" aria-hidden="true">${({ tapir: '🐾', flyingsquirrel: '🐿️', flyingfox: '🦇' })[key] || '🐾'}</span>`;
+    : `<span class="art portrait-fallback" aria-hidden="true">${({ tapir: '🐾', flyingsquirrel: '🐿️', flyingfox: '🦇', owl: '🦉', porcupine: '🌵', elephant: '🐘' })[key] || '🐾'}</span>`;
 
   // place a character with its feet at (x,y), scaled by s
   const ch = (key, x, y, s = .6, flip = false) =>

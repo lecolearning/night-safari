@@ -22,6 +22,27 @@
         'I am a large bat with a fox-like face. My eyes and nose help me find supper.',
         '“Flying” + a pointy-eared woodland animal. “Fruit bat” counts too.'],
     },
+    owl: {
+      aliases: ['owl', 'fish owl', 'buffy fish owl', 'buffy owl'],
+      outline: 'A round bird with two little head tufts, folded wings and small feet, holding a folded map.',
+      clues: ['I am a bird, awake after dark. My map-reading is less impressive than my night vision.',
+        'Fish, crabs and frogs can all be on my supper menu.',
+        'My short name is three letters and starts with O. Think “hoot”.'],
+    },
+    porcupine: {
+      aliases: ['porcupine', 'brazilian porcupine', 'prehensile tailed porcupine', 'tree porcupine'],
+      outline: 'A rounded quilled animal with a long curling tail, a little sling bag and one flower tucked into it.',
+      clues: ['My prickly coat is made of quills. The little flower is just for someone special.',
+        'My long tail can grip branches to help me climb. I am not a hedgehog.',
+        'My name starts with “porcu” and ends with “pine”.'],
+    },
+    elephant: {
+      aliases: ['elephant', 'asian elephant', 'asiatic elephant'],
+      outline: 'A large round-eared animal with a long curved trunk carrying a basket, and sturdy little legs.',
+      clues: ['My long trunk is helping me carry a picnic for two.',
+        'I am a very large plant-eating mammal. My Asian relatives have smaller ears than African ones.',
+        'My name begins with E. Think trunk, big ears and a gentle giant.'],
+    },
   };
   const KEYS = Object.keys(ANIMALS);
   const normalize = value => String(value == null ? '' : value).normalize('NFKC').toLowerCase()

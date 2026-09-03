@@ -6,6 +6,9 @@ for (const [key, aliases] of Object.entries({
   tapir: ['tapir', 'Malayan Tapir', ' the Asian tapir! '],
   flyingsquirrel: ['flying squirrel', 'Spotted Giant Flying Squirrel', 'a flying-squirrel'],
   flyingfox: ['flying fox', 'MALAYAN FLYING FOX', 'Fruit Bat', 'large flying fox'],
+  owl: ['owl', 'BUFFY FISH-OWL', 'a fish owl'],
+  porcupine: ['porcupine', 'Brazilian Porcupine', 'a prehensile-tailed porcupine'],
+  elephant: ['elephant', 'Asian Elephant', 'the asiatic elephant'],
 })) {
   test(key + ' accepts familiar names and harmless formatting', () => {
     for (const alias of aliases) {

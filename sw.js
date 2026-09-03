@@ -2,7 +2,7 @@
    The park has patchy signal, so everything is cached on first visit and
    served from the cache afterwards. Bump VERSION to ship an update. */
 
-const VERSION = 'ns-v13';
+const VERSION = 'ns-v16';
 const CORE = 'core-' + VERSION;
 const RUNTIME = 'runtime-' + VERSION;
 
@@ -22,6 +22,7 @@ const CORE_ASSETS = [
   'pokedex.html',
   'pokedex.js',
   'bonus-quests.js',
+  'keepsakes.js',
   'pokedex.css',
   'bingo.js',
   'sunday.js',
@@ -38,6 +39,9 @@ const CORE_ASSETS = [
   'img/tapir.webp',
   'img/flyingsquirrel.webp',
   'img/flyingfox.webp',
+  'img/owl.webp',
+  'img/porcupine.webp',
+  'img/elephant.webp',
   'img/shadow-001.webp',
   'img/shadow-002.webp',
   'img/shadow-003.webp',
@@ -48,6 +52,12 @@ const CORE_ASSETS = [
   'img/shadow-009.webp',
   'img/shadow-010.webp',
   'img/shadow-011.webp',
+  'img/shadow-012.webp',
+  'img/shadow-013.webp',
+  'img/shadow-014.webp',
+  'img/reward-play.webp',
+  'img/reward-meal.webp',
+  'img/reward-tour.webp',
   'img/scene_intro.webp',
   'img/scene_gate.webp',
   'img/scene_snacks.webp',

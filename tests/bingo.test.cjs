@@ -89,10 +89,10 @@ function boot({ search = '', stored = new Map(), storageDenied = false, fullKeys
 test('existing bonus-animal squares gain their portraits without reshuffling or losing marks', () => {
   const app = boot();
   const saved = fullCard();
-  const labels = ['A Malayan tapir, two-tone', 'A flying squirrel, gliding', 'A fruit bat, wings folded'];
+  const labels = ['An Asian elephant, gentle', 'A porcupine, quills out', 'A fish-owl, watching quietly'];
   labels.forEach((label, i) => { saved.cells[i] = { icon: '🐾', label, kind: 'wildlife' }; });
   const repaired = app.read('validCard(' + JSON.stringify(saved) + ', "Ace")');
-  assert.deepEqual(repaired.cells.slice(0, 3).map(cell => cell.art), ['tapir', 'flyingsquirrel', 'flyingfox']);
+  assert.deepEqual(repaired.cells.slice(0, 3).map(cell => cell.art), ['elephant', 'porcupine', 'owl']);
   assert.deepEqual(repaired.on, saved.on);
   assert.deepEqual(repaired.celebrated, saved.celebrated);
   assert.deepEqual(repaired.cells.slice(0, 3).map(cell => cell.label), labels);
@@ -1318,7 +1318,7 @@ const CONFIRMED_RESIDENTS = [
   'otter', 'tiger', 'pangolin', 'loris', 'fishing cat', 'binturong', 'dhole',
   'tapir', 'elephant', 'hyena', 'flying squirrel', 'leopard cat', 'fruit bat',
   'rhino', 'lion', 'babirusa', 'porcupine', 'wallaby', 'civet', 'tasmanian devil',
-  'leopard', 'sugar glider',
+  'leopard', 'sugar glider', 'fish-owl',
 ];
 // Named in third-party guides only, so deliberately kept off the card.
 const UNCONFIRMED = ['capybara', 'sambar', 'python', 'snake', 'giraffe', 'panda', 'koala'];

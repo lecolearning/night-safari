@@ -1,5 +1,5 @@
 /* ============================================================
-   Night Safari field guide — seven quiz friends and three trail bonuses.
+   Night Safari field guide — seven quiz friends and six trail bonuses.
    Loads after art.js and animals.js. Renders the grid and the
    detail card into #dex-view and keeps the animal id in the URL
    hash, so #otter can be linked and Back behaves itself.
@@ -15,10 +15,11 @@
 
   /* ---------- the set, in card order ---------- */
   const CORE_ORDER = (window.QUIZ_ANIMAL_KEYS || ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong']).filter((k) => A[k]);
-  const BONUS_ORDER = ['tapir', 'flyingsquirrel', 'flyingfox'].filter((k) => A[k]);
+  const BONUS_ORDER = ['tapir', 'flyingsquirrel', 'flyingfox', 'owl', 'porcupine', 'elephant'].filter((k) => A[k]);
   const ORDER = [...CORE_ORDER, ...BONUS_ORDER];
   const isBonus = (k) => BONUS_ORDER.includes(k);
   const quests = window.BONUS_QUESTS;
+  const keepsakes = window.KEEPSAKES;
   const N = ORDER.length;
 
   if (!N) {
@@ -31,6 +32,7 @@
     otter: 'Otter', dhole: 'Dhole', loris: 'Slow Loris', pangolin: 'Pangolin',
     fishingcat: 'Fishing Cat', tiger: 'Tiger', binturong: 'Binturong',
     tapir: 'Tapir', flyingsquirrel: 'Flying Squirrel', flyingfox: 'Flying Fox',
+    owl: 'Fish-owl', porcupine: 'Porcupine', elephant: 'Elephant',
   };
   /* Names follow config.js, so the aliases stay on when NAMES_ON is false. */
   const PEOPLE = window.PEOPLE || {};
@@ -75,10 +77,11 @@
   try {
     const saved = JSON.parse(localStorage.getItem(BONUS_KEY) || '[]');
     if (Array.isArray(saved)) earned = [...new Set(saved.filter(k => BONUS_ORDER.includes(k)))];
-  } catch (_) { /* A corrupt value or private browser starts with three fresh games. */ }
+  } catch (_) { /* A corrupt value or private browser starts with fresh games. */ }
   const games = {};
   const isMet = (k) => isBonus(k) ? earned.includes(k) : isAuto(k) || SEEN.indexOf(k) >= 0;
   const metCount = () => ORDER.filter(isMet).length;
+  const collectionComplete = () => metCount() === N;
 
   /* ---------- text helpers ---------- */
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({
@@ -100,7 +103,7 @@
 
   /* The card number is the only id we put in the markup. img/otter.webp would
      hand the whole surprise over to anyone who opened the inspector. */
-  // Keep original card numbers and the sealed No. 008 stable; bonuses are 009–011.
+  // Keep existing card numbers stable; append new bonuses after 011. No. 008 stays sealed.
   const idx = (k) => CORE_ORDER.includes(k) ? CORE_ORDER.indexOf(k) + 1 :
     BONUS_ORDER.includes(k) ? BONUS_ORDER.indexOf(k) + 9 : 0;
   const byIdx = (s) => ORDER.find(k => idx(k) === Number(s)) || '';
@@ -129,6 +132,9 @@
     tapir: 'A tiny whistle from someone in no particular hurry.',
     flyingsquirrel: 'A quick little chirrup, then off to the next tree.',
     flyingfox: 'Two soft chatters. Supper has been located.',
+    owl: 'Two rounded little hoots. A confident direction, probably.',
+    porcupine: 'A tiny rustle and a shy little snuffle.',
+    elephant: 'A warm, low rumble. The picnic is ready.',
   };
 
   let audio = null;            // AudioContext, made on the first tap
@@ -265,6 +271,18 @@
       [0, 0.28].forEach((at, i) => chirp(c, bus, at,
         { f0: 570 - i * 50, f1: 340, dur: 0.2, gain: 0.1, soft: true }));
     },
+    owl: (c, bus) => {
+      [0, 0.42].forEach((at, i) => chirp(c, bus, at,
+        { f0: 440 - i * 35, f1: 350 - i * 25, dur: 0.3, gain: 0.1, soft: true }));
+    },
+    porcupine: (c, bus) => {
+      puff(c, bus, 0, { f: 580, q: 0.8, dur: 0.24, gain: 0.035 });
+      chirp(c, bus, 0.28, { f0: 340, f1: 260, dur: 0.22, gain: 0.07, soft: true });
+    },
+    elephant: (c, bus) => {
+      rumble(c, bus, 0, { f0: 100, f1: 65, dur: 0.8, gain: 0.18, cut: 300 });
+      puff(c, bus, 0.05, { f: 220, q: 0.8, dur: 0.65, gain: 0.025 });
+    },
   };
 
   function playCry(key, btn) {
@@ -365,10 +383,11 @@
       + '<p class="dex-note">Seven quiz friends, seven real residents. A shadow fills itself in the moment you meet the animal, '
       + 'and every fact that turns up on it is true, including the popcorn. The little ♪ plays a met animal’s call. '
       + 'Each shadow matches its portrait.</p>'
-      + '<section class="dex-bonus-section" aria-labelledby="bonus-title"><h2 id="bonus-title">Three little detours</h2>'
+      + '<section class="dex-bonus-section" aria-labelledby="bonus-title"><h2 id="bonus-title">Six little detours</h2>'
       + '<p>These lilac-bordered friends are not quiz results. Who is hiding in each shadow? Guess their names to collect their cards.</p>'
       + '<ul class="dex-grid">' + BONUS_ORDER.map(cardHTML).join('') + '</ul>'
       + '<p class="dex-note">Clues if you need them. As many guesses as you like. A bonus is a little discovery, not a claim that you spotted the animal.</p></section>'
+      + keepsakesHTML()
       + '<section class="dex-afterword" aria-labelledby="afterword-title"><h2 id="afterword-title">For another night</h2>'
       + '<ul class="dex-grid dex-last-card">' + locked + '</ul>'
       + '<p class="dex-note">No. 008 is not a mistake. Some introductions can wait.</p></section>'
@@ -426,6 +445,53 @@
       + '<p class="dex-locknote">Guess together if you like. Your discovery is saved on this device.</p>'
       + '</div></article>';
   }
+
+  function keepsakesHTML() {
+    if (!keepsakes) return '';
+    if (!collectionComplete()) return '<section class="dex-keepsakes dex-keepsakes-locked">'
+      + '<span aria-hidden="true">🎁</span><h2>A little something at the end</h2>'
+      + '<p>Collect all ' + N + ' animal cards to unwrap three pictures of the whole gang: playing, sharing a meal, and exploring together.</p>'
+      + '<p class="dex-keepsake-note">' + (N - metCount()) + ' cards to go. The unidentified card can wait for another night.</p></section>';
+    return '<section class="dex-keepsakes" aria-labelledby="keepsakes-title" id="keepsakes">'
+      + '<span class="tag mint">The whole gang, together</span>'
+      + '<h2 id="keepsakes-title" tabindex="-1">A little night worth keeping</h2>'
+      + '<p>You found everyone. Here are three pictures to take home—one for each way of spending a lovely little evening.</p>'
+      + '<div class="dex-keepsake-grid">' + keepsakes.ITEMS.map(item =>
+        '<article class="dex-keepsake"><a href="' + esc(item.file) + '" target="_blank" rel="noopener noreferrer" aria-label="View ' + esc(item.title) + ' at full size">'
+        + '<img src="' + esc(item.file) + '" alt="All thirteen animal friends ' + (item.key === 'play' ? 'playing together in a moonlit clearing' : item.key === 'meal' ? 'sharing a moonlit picnic' : 'exploring the wildlife park together at night')
+        + '" loading="lazy" width="1448" height="1086"></a><h3>' + esc(item.title) + '</h3><p>' + esc(item.description) + '</p>'
+        + '<div class="dex-keepsake-actions"><button class="btn mint" type="button" data-save-keepsake="' + esc(item.key) + '">Save / share PNG</button>'
+        + '<a href="' + esc(item.file) + '" target="_blank" rel="noopener noreferrer">View full size ↗</a></div></article>').join('')
+      + '</div><p class="dex-keepsake-note">Full-size PNGs are prepared on your device. On a phone, choose Save Image from the share sheet if offered. You can also open a picture and save it directly.</p>'
+      + '<p id="keepsake-status" class="dex-keepsake-note" role="status" aria-live="polite"></p></section>';
+  }
+
+  function showKeepsakes() {
+    if (!collectionComplete()) return;
+    history.replaceState(null, '', location.pathname + location.search + '#keepsakes');
+    render({ force: true, quiet: true });
+  }
+
+  async function saveKeepsake(key, button) {
+    if (!collectionComplete() || !keepsakes || !keepsakes.ITEMS.some(item => item.key === key) || button.disabled) return;
+    const original = button.textContent;
+    const status = document.getElementById('keepsake-status');
+    const tell = message => { if (status) status.textContent = message; say(message); };
+    button.disabled = true;
+    button.textContent = 'Preparing your picture…';
+    button.setAttribute('aria-busy', 'true');
+    try {
+      const result = await keepsakes.save(key);
+      tell(result === 'cancelled' ? 'No rush. Your pictures are still here.' : result === 'shared'
+        ? 'Your picture was handed to the share sheet.' : 'Your PNG download has started. A little night to keep.');
+    } catch (_) {
+      tell('That save did not work this time. Try “View full size”, then save the picture from there.');
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+      button.removeAttribute('aria-busy');
+    }
+  }
   const clueLabel = game => game.hints === 3 ? 'All three clues are here' :
     (game.hints ? 'One more little clue' : 'A little clue, please');
   const cluesHTML = game => quests.clues(game).map((clue, i) =>
@@ -451,6 +517,7 @@
     render({ force: true, quiet: true, keepPosition: true });
     paintProgress();
     say('You found me! ' + A[shown].name + ' joined your collection.'
+      + (collectionComplete() ? ' Your three group pictures are ready. Choose “See our group pictures” to open them.' : '')
       + (bonusSaved ? '' : ' Your browser could not save it; keep this tab open for this visit.'));
   }
 
@@ -525,12 +592,13 @@
       + '</div>'
       + '<div class="idbody">'
       + '<div class="dex-bigpic">' + pic(k) + '</div>'
+      + (collectionComplete() && keepsakes ? '<div class="dex-reward-invite"><p>You found everyone. A little something is waiting for you.</p>'
+        + '<button class="btn mint" type="button" data-show-keepsakes>See our group pictures 🎁</button></div>' : '')
       + '<button type="button" class="dex-cry" data-cry="' + esc(k) + '">'
       + '<span aria-hidden="true">♪</span> Hear the ' + esc(lower(k)) + '</button>'
       + '<p class="dex-crynote">' + esc(CRY_NOTE[k] || '') + ' Synthesised on the spot by a browser that has never met one.</p>'
 
-      + '<div class="idblock"><b>One true thing</b>' + esc(an.fact)
-      + (an.source && an.source.startsWith('https://www.mandai.com/') ? '<a class="dex-fact-source" href="' + esc(an.source) + '" target="_blank" rel="noopener noreferrer">Animal facts: Mandai ↗</a>' : '') + '</div>'
+      + '<div class="idblock"><b>One true thing</b>' + esc(an.fact) + '</div>'
       + '<div class="idblock"><b>Where to find it on Saturday</b>' + esc(an.findme) + '</div>'
       + '<div class="idblock"><b>Strengths</b>' + listHTML(an.strengths) + '</div>'
       + '<div class="idblock"><b>Weakness</b>' + listHTML(an.weakness) + '</div>'
@@ -584,7 +652,8 @@
     history.replaceState(null, '', '#' + token(k));
     render({ force: true, quiet: true });
     paintProgress();
-    say('Met! ' + A[k].name + ', card ' + num(k) + '. The file is open.');
+    say('Met! ' + A[k].name + ', card ' + num(k) + '. The file is open.'
+      + (collectionComplete() ? ' Your three group pictures are ready. Choose “See our group pictures” to open them.' : ''));
   }
 
   function relock(k) {
@@ -603,6 +672,7 @@
      Routing: the hash is the whole state.
      ============================================================ */
   let shown = null;         // null before the first paint, '' for the grid, else an id
+  let shownHash = null;     // distinguish the gallery anchor from the ordinary grid
   let last = ORDER[0];      // the card to return focus to
   let pushed = false;       // did we push the current detail entry ourselves?
 
@@ -622,9 +692,10 @@
     const force = !!(opt && opt.force);
     const quiet = !!(opt && opt.quiet);
     const id = hashId();
-    if (id === shown && !force) return;
+    if (id === shown && location.hash === shownHash && !force) return;
     const first = shown === null;
     shown = id;
+    shownHash = location.hash;
 
     if (id) {
       last = id;
@@ -650,6 +721,12 @@
     } else {
       view.innerHTML = gridHTML();
       pushed = false;
+      if (location.hash === '#keepsakes' && collectionComplete()) {
+        const title = document.getElementById('keepsakes-title');
+        if (title) { title.focus({ preventScroll: true }); title.scrollIntoView({ block: 'start' }); }
+        say('Everyone is here. Your three group pictures are ready to save.');
+        return;
+      }
       if (!first) {
         const card = view.querySelector('.dex-card[data-idx="' + idx(last) + '"]');
         if (card) card.focus({ preventScroll: true });
@@ -701,6 +778,9 @@
   }
 
   view.addEventListener('click', (e) => {
+    if (e.target.closest('[data-show-keepsakes]')) { showKeepsakes(); return; }
+    const save = e.target.closest('[data-save-keepsake]');
+    if (save) { saveKeepsake(save.getAttribute('data-save-keepsake'), save); return; }
     const clue = e.target.closest('[data-bonus-hint]');
     if (clue) { showClue(clue); return; }
     const cry = e.target.closest('[data-cry]');

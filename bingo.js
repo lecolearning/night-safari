@@ -27,7 +27,7 @@ const PHOTO_MAX_EDGE = 640;
 const PHOTO_QUALITY = 0.7;
 const PHOTO_MAX_CHARS = 700000;
 const PHOTO_PATTERN = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
-const ART_KEYS = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong', 'tapir', 'flyingsquirrel', 'flyingfox'];
+const ART_KEYS = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong', 'tapir', 'flyingsquirrel', 'flyingfox', 'owl', 'porcupine', 'elephant'];
 const FREE_CELL = { icon: '💛', label: 'Here with you', kind: 'free' };
 
 // Night Safari residents and the small sensory things you actually look for in the dark.
@@ -44,7 +44,7 @@ const WILDLIFE = [
   ['🍿', 'A binturong (like popcorn)', 'binturong'],
   ['🐕', 'A dhole, the whistling dog', 'dhole'],
   ['🐖', 'A Malayan tapir, two-tone', 'tapir'],
-  ['🐘', 'An Asian elephant, gentle'],
+  ['🐘', 'An Asian elephant, gentle', 'elephant'],
   ['🐺', 'A striped hyena, head down'],
   ['🐿️', 'A flying squirrel, gliding', 'flyingsquirrel'],
   ['🐆', 'A leopard cat, small spots'],
@@ -53,7 +53,8 @@ const WILDLIFE = [
   ['🦁', 'A lion with a proper mane'],
   ['😈', 'A Tasmanian devil, awake'],
   ['🐗', 'A babirusa and its tusks'],
-  ['🌵', 'A porcupine, quills out'],
+  ['🌵', 'A porcupine, quills out', 'porcupine'],
+  ['🦉', 'A fish-owl, watching quietly', 'owl'],
   ['🦘', 'A wallaby, mid-hop'],
   ['🐆', 'A leopard, high on a branch'],
   ['🌴', 'A palm civet on the move'],
@@ -139,7 +140,7 @@ function validCard(value, who) {
         typeof cell.label !== 'string' || !cell.label.trim() || cell.label.length > LABEL_MAX) return null;
     return { icon: cell.icon, label: cell.label,
       art: ART_KEYS.includes(cell.art) ? cell.art :
-        WILDLIFE.find(item => item.label === cell.label && ['tapir', 'flyingsquirrel', 'flyingfox'].includes(item.art))?.art,
+        WILDLIFE.find(item => item.label === cell.label && ART_KEYS.includes(item.art))?.art,
       kind: ['wildlife', 'together', 'free'].includes(cell.kind) ? cell.kind : 'together' };
   });
   if (cells.some(cell => !cell)) return null;

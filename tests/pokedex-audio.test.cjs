@@ -71,8 +71,8 @@ function audioContext() {
   return { context, nodes, buffers, bus: { kind: 'bus' } };
 }
 
-test('all ten calls schedule finite, bounded audio with faded endings', () => {
-  assert.equal(Object.keys(cries).length, 10);
+test('all thirteen calls schedule finite, bounded audio with faded endings', () => {
+  assert.equal(Object.keys(cries).length, 13);
   for (const [name, cry] of Object.entries(cries)) {
     const { context, bus, nodes } = audioContext();
     cry(context, bus);
