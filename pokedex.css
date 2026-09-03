@@ -1,0 +1,144 @@
+/* ============================================================
+   Night Safari field guide.
+   Loaded AFTER style.css: it borrows that file's tokens
+   (--paper, --ink, --gold, --border, --lift) and only adds.
+   Everything is scoped to .pokedex-page so nothing else moves.
+   ============================================================ */
+
+.pokedex-page{color-scheme:dark}
+.pokedex-page .wrap{max-width:560px;padding:24px 14px 56px}
+.pokedex-page button{font:inherit}
+.pokedex-page button:focus-visible,
+.pokedex-page a:focus-visible,
+.pokedex-page [tabindex]:focus-visible{outline:3px solid var(--gold);outline-offset:3px;border-radius:8px}
+
+/* ---------- header ---------- */
+.dex-head{text-align:center;margin-bottom:16px}
+.dex-head h1{margin:6px 0 8px}
+.dex-lede{font-size:14.5px;line-height:1.55;color:#efe7ff;margin:0}
+
+/* ---------- the gentle progress line ---------- */
+.dex-progress:empty{display:none}
+.dex-progress{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.22);
+  border-radius:16px;padding:12px 13px;margin:0 0 16px;text-align:center}
+.dex-pips{display:flex;justify-content:center;gap:5px;margin-bottom:9px}
+.dex-pips i{flex:1 1 0;max-width:38px;height:9px;border-radius:99px;
+  background:rgba(255,255,255,.14);box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+.dex-pips i.met{background:var(--acc,var(--gold));box-shadow:inset 0 0 0 1px rgba(0,0,0,.45),0 0 10px rgba(255,207,92,.3)}
+.dex-progress p{font-size:13px;line-height:1.55;color:#e6ddfb;margin:0}
+.dex-progress b{color:var(--gold)}
+
+/* ---------- the set ---------- */
+.dex-grid{list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0;padding:0}
+@media (min-width:430px){.dex-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}}
+.dex-cell{position:relative;display:flex;min-width:0}
+.dex-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;
+  width:100%;min-width:0;cursor:pointer;text-align:center;color:var(--ink);background:var(--paper);
+  border:var(--border);border-bottom:6px solid var(--acc,var(--gold));
+  border-radius:16px 13px 17px 14px / 14px 17px 13px 16px;
+  padding:13px 7px 10px;box-shadow:3px 4px 0 rgba(0,0,0,.32);
+  transition:transform .14s,box-shadow .14s}
+.dex-card:active{transform:translate(2px,3px);box-shadow:1px 1px 0 rgba(0,0,0,.32)}
+@media (hover:hover){.dex-card:hover{transform:translateY(-3px) rotate(-.7deg);box-shadow:4px 6px 0 rgba(0,0,0,.34)}}
+.dex-no{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);
+  background:var(--acc,var(--gold));border:2px solid var(--ink);border-radius:999px;
+  padding:2px 9px;box-shadow:1px 2px 0 rgba(0,0,0,.3);white-space:nowrap}
+.dex-pic{display:block;width:100%;aspect-ratio:1;background:#fff;border:2px solid var(--ink);
+  border-radius:12px;padding:5px;overflow:hidden}
+.dex-name{font-family:'Fredoka','Nunito',sans-serif;font-weight:700;font-size:15px;line-height:1.12;overflow-wrap:break-word}
+.dex-species{font-size:10px;font-weight:700;line-height:1.3;color:var(--ink-soft);overflow-wrap:break-word}
+.dex-status{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#8b8299}
+.dex-card.is-met .dex-status{color:#2f7a58}
+
+/* ---------- badges: YA's fishing cat, XJ's result ---------- */
+.dex-badges{position:absolute;top:-9px;right:-5px;display:flex;gap:4px;z-index:2}
+.dex-badge{font-size:9.5px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);
+  background:var(--mint);border:2px solid var(--ink);border-radius:999px;padding:2px 7px;
+  box-shadow:1px 2px 0 rgba(0,0,0,.35);white-space:nowrap}
+.dex-badge.xj{background:var(--coral)}
+
+/* ---------- the little speaker on each card ---------- */
+.dex-sound{position:absolute;top:-9px;left:-6px;z-index:3;width:32px;height:32px;padding:0;
+  display:grid;place-items:center;font-size:14px;line-height:1;cursor:pointer;color:var(--ink);
+  background:var(--paper2);border:2px solid var(--ink);border-radius:50%;
+  box-shadow:1px 2px 0 rgba(0,0,0,.35);touch-action:manipulation}
+.dex-sound:active{transform:translate(1px,1px);box-shadow:none}
+.dex-sound.playing{background:var(--gold);animation:dexPing .5s ease-out}
+@keyframes dexPing{50%{transform:scale(1.18)}}
+
+/* ---------- one animal's file ---------- */
+.dex-topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}
+.dex-mini{font-size:13px;font-weight:800;cursor:pointer;color:var(--ink);background:var(--paper);
+  border:var(--border);border-radius:999px;padding:10px 15px;min-height:44px;box-shadow:2px 3px 0 rgba(0,0,0,.3)}
+.dex-mini:active{transform:translate(2px,3px);box-shadow:none}
+.dex-of{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#d6cdf0;white-space:nowrap}
+.dex-file .idhead{padding:16px 12px 14px}
+.dex-hno{font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:rgba(29,26,42,.68)}
+.dex-file .idname{margin:2px 0 0;outline-offset:4px}
+.dex-tagline{font-size:13.5px;font-weight:700;line-height:1.4;color:rgba(29,26,42,.85);margin:6px 0 0}
+.dex-file .idhead .dex-badges{position:static;justify-content:center;margin-top:10px}
+.dex-bigpic{width:100%;max-width:210px;margin:0 auto;aspect-ratio:1;background:#fff;border:var(--border);
+  border-radius:14px;padding:8px;box-shadow:3px 4px 0 rgba(0,0,0,.25)}
+.dex-cry{display:inline-flex;align-items:center;gap:8px;margin:12px auto 0;cursor:pointer;
+  font-size:14.5px;font-weight:800;color:var(--ink);background:var(--acc,var(--gold));
+  border:var(--border);border-radius:999px;padding:11px 18px;min-height:46px;
+  box-shadow:3px 4px 0 rgba(0,0,0,.3)}
+.dex-cry:active{transform:translate(2px,3px);box-shadow:1px 1px 0 rgba(0,0,0,.3)}
+.dex-cry.playing{animation:dexPing .5s ease-out}
+.dex-crynote{font-size:11.5px;line-height:1.5;color:var(--ink-soft);margin:8px 0 0}
+.dex-file .idblock{text-align:left}
+.dex-list{list-style:none;margin:0;padding:0}
+.dex-list li{line-height:1.45}
+.dex-list li::before{content:"\2013\00a0"}
+.dex-peer{display:block}
+.dex-peer + .dex-peer{margin-top:8px}
+.dex-peer q{font-style:italic;quotes:"\201C" "\201D"}
+.dex-peer span{display:block;font-size:12.5px;font-weight:800;color:var(--ink-soft);margin-top:2px}
+.dex-nav{display:flex;gap:8px;margin-top:14px}
+.dex-navbtn{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;
+  font-size:13.5px;font-weight:800;cursor:pointer;color:var(--ink);background:var(--paper);
+  border:var(--border);border-radius:999px;padding:12px 10px;min-height:48px;box-shadow:3px 4px 0 rgba(0,0,0,.32)}
+.dex-navbtn:active{transform:translate(2px,3px);box-shadow:1px 1px 0 rgba(0,0,0,.32)}
+.dex-navbtn .lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dex-navbtn .arw{flex:0 0 auto;font-size:16px;line-height:1}
+.dex-hint{font-size:12px;line-height:1.5;text-align:center;color:#cfc6e8;margin:12px 0 0}
+.dex-note{font-size:12.5px;line-height:1.55;text-align:center;color:#d8d0eb;margin:16px 0 0}
+
+/* ---------- small phones ---------- */
+@media (max-width:359px){
+  .pokedex-page .wrap{padding-left:10px;padding-right:10px}
+  .dex-grid{gap:8px}
+  .dex-card{padding:12px 5px 9px}
+  .dex-name{font-size:14px}
+  .dex-no{padding:2px 7px;letter-spacing:.06em}
+  .dex-badge{padding:2px 5px}
+  .dex-sound{width:30px;height:30px;left:-5px}
+  .dex-navbtn{font-size:12.5px;padding:12px 8px}
+}
+
+/* ---------- preferences ---------- */
+@media (prefers-reduced-motion:reduce){
+  .pokedex-page *,.pokedex-page *::before,.pokedex-page *::after{
+    animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .pokedex-page .dex-card:hover{transform:none}
+}
+@media (prefers-color-scheme:light){
+  /* The safari is dark whatever the phone thinks. Keep the night sky and the
+     cream cards identical in both schemes, just a touch brighter on the text. */
+  .pokedex-page .dex-progress{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.32)}
+  .pokedex-page .dex-lede,.pokedex-page .dex-progress p{color:#f6f1ff}
+  .pokedex-page .dex-of,.pokedex-page .dex-note,.pokedex-page .dex-hint{color:#e9e1fb}
+}
+
+/* No. 008 — the one that never fills in. Ties back to Case 002. */
+.dex-card.dex-locked{background:linear-gradient(160deg,#241c3f,#141029);color:#cfc6ea;
+  border:2px dashed rgba(255,207,92,.55);border-bottom:6px dashed rgba(255,207,92,.55)}
+.dex-card.dex-locked .dex-no{background:rgba(255,207,92,.2);color:var(--gold)}
+.dex-card.dex-locked .dex-name{color:var(--gold)}
+.dex-card.dex-locked .dex-species,.dex-card.dex-locked .dex-status{color:#a89fc4}
+.dex-card.dex-locked .dex-pic{background:rgba(255,255,255,.05);border-color:rgba(255,207,92,.4)}
+.dex-qmark{display:flex;align-items:center;justify-content:center;width:100%;height:100%;
+  font-family:'Fredoka',sans-serif;font-size:46px;font-weight:700;color:var(--gold);opacity:.8}
+.dex-locked.nudge{animation:dexNudge .5s}
+@keyframes dexNudge{0%,100%{transform:none}25%{transform:translateX(-4px) rotate(-1deg)}75%{transform:translateX(4px) rotate(1deg)}}
+@media (prefers-reduced-motion:reduce){.dex-locked.nudge{animation:none}}

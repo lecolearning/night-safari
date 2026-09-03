@@ -1,5 +1,10 @@
 /* A pocket-sized collection of little moments. Everything stays on this phone. */
-const NAMES = ['XJ', 'YA'];
+// Player labels come from config.js when the page provides it, so the one
+// NAMES_ON switch there covers the bingo too. The literal pair is the fallback
+// for the test harness, which runs this file without config.js.
+const NAMES = (typeof PEOPLE !== 'undefined' && Array.isArray(PEOPLE.players) && PEOPLE.players.length === 2)
+  ? PEOPLE.players.slice()
+  : ['XJ', 'YA'];
 const SIZE = 4;                          // four across, four down
 const CELLS = SIZE * SIZE;               // sixteen squares
 const FREE_INDEX = 5;                    // row 2, column 2 — sits on the ↘ diagonal
@@ -94,6 +99,8 @@ let storageOK = true;
 let view = 'board';        // 'board' | 'summary'
 let lightbox = null;       // index of the photo shown large
 let notice = null;         // one gentle, temporary message
+let keepsakeNote = null;   // how saving the photos went, on the end screen only
+let working = false;       // a keepsake is being drawn; one at a time is plenty
 
 function shuffle(items) {
   const result = items.slice();
@@ -109,7 +116,7 @@ function newCard(who) {
     ...shuffle(TOGETHER).slice(0, TOGETHER_PER_CARD),
   ]);
   cells.splice(FREE_INDEX, 0, { ...FREE_CELL });
-  return { who, cells, on: cells.map((_, i) => i === FREE_INDEX), celebrated: [] };
+  return { who, cells, on: cells.map((_, i) => i === FREE_INDEX), celebrated: [], started: Date.now() };
 }
 
 function validCard(value, who) {
@@ -128,7 +135,9 @@ function validCard(value, who) {
   on[FREE_INDEX] = true;
   const celebrated = Array.isArray(value.celebrated) ? [...new Set(value.celebrated.filter(i =>
     Number.isInteger(i) && i >= 0 && i < LINES.length))] : [];
-  return { who, cells, on, celebrated };
+  // The night this card began, so a keepsake can be dated. An older save simply starts from today.
+  const started = Number.isFinite(value.started) && value.started > 0 ? Math.floor(value.started) : Date.now();
+  return { who, cells, on, celebrated, started };
 }
 function readJSON(key) {
   let raw;
@@ -238,13 +247,364 @@ function downscale(file) {
   });
 }
 
+/* ---------- one keepsake image ---------- */
+// These photos live in one browser and nowhere else. This turns the lot of them into a
+// single picture that can sit in a camera roll, a chat, or a printer — somewhere that lasts.
+const SHEET_WIDTH = 1080;                // kind to a phone screen and still decent printed
+const SHEET_MARGIN = 48;
+const SHEET_GUTTER = 28;
+const SHEET_PAD = 12;                    // the white border around each little polaroid
+const SHEET_CAPTION = 46;                // room under each photo for its square’s label
+const SHEET_CELL_MAX = 460;              // one lonely photo shouldn’t balloon to the full width
+const SHEET_HEAD = 196;                  // title and date
+const SHEET_FOOT = 116;                  // the warm line at the bottom
+const SHEET_COLS_MAX = 4;
+const SHEET_TILT = 1.6;                  // degrees — just enough to look taped in
+const SHEET_QUALITY = 0.88;
+const SHEET_CREAM = '#fff7e6';
+const SHEET_INK = '#2b2340';
+const SHEET_SOFT = '#5e5673';
+const SHEET_TITLE_FONT = '"Fredoka","Nunito","Segoe UI",sans-serif';
+const SHEET_BODY_FONT = '"Nunito","Segoe UI",sans-serif';
+
+function sheetLabelSize(cellWidth) { return cellWidth < 260 ? 16 : 19; }
+function sheetLabelMax(cellWidth) {
+  const inner = cellWidth - SHEET_PAD * 2 - 8;
+  return Math.max(12, Math.min(34, Math.floor(inner / (sheetLabelSize(cellWidth) * 0.55))));
+}
+// Gentle, alternating, and always the same tilt for the same position.
+function tiltAt(index) {
+  return (index % 2 ? 1 : -1) * SHEET_TILT * (1 + (index % 3) * 0.15);
+}
+// Where every polaroid sits. One photo through sixteen, always inside the page.
+function sheetLayout(count) {
+  const total = Math.min(Math.max(Math.floor(Number(count)) || 0, 0), CELLS);
+  if (total < 1) return null;
+  const cols = Math.min(SHEET_COLS_MAX, Math.ceil(Math.sqrt(total)));
+  const rows = Math.ceil(total / cols);
+  const room = SHEET_WIDTH - SHEET_MARGIN * 2 - SHEET_GUTTER * (cols - 1);
+  const cellW = Math.min(SHEET_CELL_MAX, Math.floor(room / cols));
+  const photoW = cellW - SHEET_PAD * 2;
+  const cellH = photoW + SHEET_PAD * 2 + SHEET_CAPTION;
+  const height = SHEET_HEAD + rows * cellH + SHEET_GUTTER * (rows - 1) + SHEET_FOOT;
+  const frames = [];
+  for (let i = 0; i < total; i++) {
+    const row = Math.floor(i / cols);
+    const column = i % cols;
+    const inRow = Math.min(cols, total - row * cols);   // a short last row is centred, not left-hung
+    const rowWidth = inRow * cellW + SHEET_GUTTER * (inRow - 1);
+    const x = Math.round((SHEET_WIDTH - rowWidth) / 2) + column * (cellW + SHEET_GUTTER);
+    const y = SHEET_HEAD + row * (cellH + SHEET_GUTTER);
+    frames.push({ x, y, w: cellW, h: cellH, row, column, tilt: tiltAt(i) });
+  }
+  return { width: SHEET_WIDTH, height, cols, rows, gutter: SHEET_GUTTER,
+    cell: { w: cellW, h: cellH }, photo: { w: photoW, h: photoW },
+    labelMax: sheetLabelMax(cellW), labelSize: sheetLabelSize(cellW), frames };
+}
+// A long label is trimmed at a word where one is near enough, never mid-letter-soup.
+function clipLabel(text, max) {
+  const clean = String(text === undefined || text === null ? '' : text).replace(/\s+/g, ' ').trim();
+  const cap = Math.max(4, Math.floor(Number(max)) || 0);
+  if (clean.length <= cap) return clean;
+  const cut = clean.slice(0, cap - 1);
+  const space = cut.lastIndexOf(' ');
+  const kept = (space >= Math.floor(cap * 0.6) ? cut.slice(0, space) : cut).replace(/[\s,.;:!?–-]+$/, '');
+  return (kept || cut.trim() || clean.slice(0, cap - 1)) + '…';
+}
+// Fill the square without squashing anybody: crop the long side away, evenly.
+function coverRect(sourceW, sourceH, boxW, boxH) {
+  if (!(sourceW > 0) || !(sourceH > 0) || !(boxW > 0) || !(boxH > 0)) return null;
+  const scale = Math.max(boxW / sourceW, boxH / sourceH);
+  const width = Math.min(sourceW, boxW / scale);
+  const height = Math.min(sourceH, boxH / scale);
+  return { x: (sourceW - width) / 2, y: (sourceH - height) / 2, w: width, h: height };
+}
+function sheetDate(when) {
+  const date = new Date(Number(when));
+  if (!Number.isFinite(date.getTime())) return '';
+  try { return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); }
+  catch (_) { return date.toISOString().slice(0, 10); }
+}
+function dayStamp(when) {
+  const date = new Date(Number(when));
+  return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : 'night';
+}
+function warmSheetLine(count) {
+  if (count >= 10) return 'A whole night, tucked into one little sheet.';
+  if (count >= 5) return 'A good handful from our night in the dark.';
+  if (count >= 2) return 'A few keepers from a very dark park.';
+  return 'One photo, with a whole evening behind it.';
+}
+function keepsakeName(who, started) { return `night-safari-${who}-${dayStamp(started)}.jpg`; }
+
+// A photo that will not decode is quietly left out rather than spoiling the sheet.
+function loadPhoto(dataURL) {
+  return new Promise(resolve => {
+    let image;
+    try { image = new Image(); } catch (_) { resolve(null); return; }
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    try { image.src = dataURL; } catch (_) { resolve(null); }
+  });
+}
+function drawSheet(ctx, layout, items, meta) {
+  ctx.fillStyle = SHEET_CREAM;
+  ctx.fillRect(0, 0, layout.width, layout.height);
+  ctx.strokeStyle = 'rgba(43,35,64,.2)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(15, 15, layout.width - 30, layout.height - 30);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = SHEET_INK;
+  ctx.font = `700 70px ${SHEET_TITLE_FONT}`;
+  ctx.fillText('Night Safari', layout.width / 2, 100);
+  ctx.font = `700 26px ${SHEET_BODY_FONT}`;
+  ctx.fillStyle = SHEET_SOFT;
+  ctx.fillText(meta.subtitle, layout.width / 2, 144);
+
+  items.forEach((item, i) => {
+    const frame = layout.frames[i];
+    ctx.save();
+    ctx.translate(frame.x + frame.w / 2, frame.y + frame.h / 2);
+    ctx.rotate(frame.tilt * Math.PI / 180);
+    ctx.translate(-frame.w / 2, -frame.h / 2);
+    ctx.fillStyle = 'rgba(43,35,64,.2)';
+    ctx.fillRect(5, 7, frame.w, frame.h);              // a flat little drop shadow
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, frame.w, frame.h);
+    const image = item.image;
+    const crop = coverRect(image.naturalWidth || image.width, image.naturalHeight || image.height,
+      layout.photo.w, layout.photo.h);
+    if (crop) {
+      try {
+        ctx.drawImage(image, crop.x, crop.y, crop.w, crop.h,
+          SHEET_PAD, SHEET_PAD, layout.photo.w, layout.photo.h);
+      } catch (_) { /* one shy photo leaves an empty frame, never a broken sheet */ }
+    }
+    ctx.fillStyle = SHEET_INK;
+    ctx.font = `700 ${layout.labelSize}px ${SHEET_BODY_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(clipLabel(item.label, layout.labelMax),
+      frame.w / 2, SHEET_PAD * 2 + layout.photo.h + Math.round(SHEET_CAPTION * 0.55));
+    ctx.restore();
+  });
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = SHEET_INK;
+  ctx.font = `700 30px ${SHEET_BODY_FONT}`;
+  ctx.fillText(meta.warm, layout.width / 2, layout.height - SHEET_FOOT + 52);
+  ctx.font = `600 22px ${SHEET_BODY_FONT}`;
+  ctx.fillStyle = SHEET_SOFT;
+  ctx.fillText('Little moments bingo · kept just for us', layout.width / 2, layout.height - SHEET_FOOT + 90);
+}
+function dataURLBlob(dataURL) {
+  try {
+    const base64 = String(dataURL).split(',')[1] || '';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: 'image/jpeg' });
+  } catch (_) { return null; }
+}
+function canvasBlob(canvas) {
+  return new Promise(resolve => {
+    try {
+      if (typeof canvas.toBlob === 'function') {
+        canvas.toBlob(blob => resolve(blob || null), 'image/jpeg', SHEET_QUALITY);
+        return;
+      }
+      resolve(dataURLBlob(canvas.toDataURL('image/jpeg', SHEET_QUALITY)));
+    } catch (_) { resolve(null); }
+  });
+}
+// Every photo on this player's card, laid out and drawn. Resolves null if there is nothing to draw.
+function composeSheet(who) {
+  const card = book.cards[who];
+  if (!card) return Promise.resolve(null);
+  const wanted = [];
+  for (let i = 0; i < CELLS; i++) {
+    const photo = photoOf(who, i);
+    if (photo) wanted.push({ index: i, label: card.cells[i].label, photo });
+  }
+  if (!wanted.length) return Promise.resolve(null);
+  return Promise.all(wanted.map(item => loadPhoto(item.photo))).then(images => {
+    const items = wanted.map((item, i) => ({ ...item, image: images[i] })).filter(item => item.image);
+    if (!items.length) return null;
+    const layout = sheetLayout(items.length);
+    let canvas;
+    try {
+      canvas = document.createElement('canvas');
+      canvas.width = layout.width;
+      canvas.height = layout.height;
+      drawSheet(canvas.getContext('2d'), layout, items, {
+        subtitle: [`${who}’s little collection`, sheetDate(card.started)].filter(Boolean).join(' · '),
+        warm: warmSheetLine(items.length),
+      });
+    } catch (_) { return null; }
+    return canvasBlob(canvas).then(blob => blob && { blob, layout,
+      drawn: items.length, missed: wanted.length - items.length });
+  });
+}
+
+/* ---------- getting a file off the phone ---------- */
+function makeBlob(parts, type) {
+  try { return new Blob(parts, { type }); } catch (_) { return null; }
+}
+function makeFile(blob, name, type) {
+  try { return new File([blob], name, { type }); } catch (_) { return null; }
+}
+function canDownload() {
+  try { return 'download' in document.createElement('a'); } catch (_) { return false; }
+}
+function canShareFile(file) {
+  if (!file || typeof navigator === 'undefined') return false;
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try { return navigator.canShare({ files: [file] }) === true; } catch (_) { return false; }
+}
+// Backing out of the share sheet is a perfectly normal thing to do; it is not an error.
+function wasCancelled(error) {
+  if (!error) return true;
+  return error.name === 'AbortError' || /abort|cancel/i.test(String(error.message || ''));
+}
+function makeURL(blob) {
+  try { return URL.createObjectURL(blob); } catch (_) { return null; }
+}
+function dropURL(url) {
+  try { URL.revokeObjectURL(url); } catch (_) { /* already gone */ }
+}
+function downloadBlob(blob, filename) {
+  if (!blob || !canDownload()) return false;
+  const url = makeURL(blob);
+  if (!url) return false;
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.rel = 'noopener';
+    anchor.className = 'sr-only';
+    // A couple of browsers only follow a link that is really on the page, so it visits, briefly.
+    if (document.body && document.body.appendChild) document.body.appendChild(anchor);
+    anchor.click();
+    if (anchor.remove) anchor.remove();
+  } catch (_) { dropURL(url); return false; }
+  setTimeout(() => dropURL(url), 20000);   // let the browser take it first, then tidy up
+  return true;
+}
+function openBlob(blob) {
+  if (!blob || typeof window === 'undefined' || typeof window.open !== 'function') return false;
+  const url = makeURL(blob);
+  if (!url) return false;
+  let opened;
+  try { opened = window.open(url, '_blank', 'noopener'); } catch (_) { opened = null; }
+  if (!opened) { dropURL(url); return false; }
+  setTimeout(() => dropURL(url), 60000);
+  return true;
+}
+// Share sheet first (that is what reaches a camera roll), then a download, then a new tab.
+function deliverImage(blob, filename, words) {
+  const file = makeFile(blob, filename, 'image/jpeg');
+  const rest = () => {
+    if (downloadBlob(blob, filename)) return { how: 'download' };
+    if (openBlob(blob)) return { how: 'tab' };
+    return { how: 'stuck' };
+  };
+  if (!canShareFile(file)) return Promise.resolve(rest());
+  return Promise.resolve()
+    .then(() => navigator.share({ files: [file], title: words.title, text: words.text }))
+    .then(() => ({ how: 'share' }), error => (wasCancelled(error) ? { how: 'cancelled' } : rest()));
+}
+
+/* ---------- a backup you can hold ---------- */
+const BACKUP_TAG = 'ns-bingo';
+const BACKUP_VERSION = 1;
+const BACKUP_TROUBLE = {
+  unreadable: 'That file wouldn’t open, so nothing has changed.',
+  shape: 'That isn’t one of our backup files, so nothing has changed.',
+  version: 'That backup came from a newer version of the card, so this one can’t read it. Nothing has changed.',
+  player: `That backup isn’t for ${NAMES[0]} or ${NAMES[1]}, so nothing has changed.`,
+  card: 'The card inside that backup is damaged, so nothing has changed.',
+  photos: 'The photos inside that backup are damaged, so nothing has changed.',
+};
+function backupOf(who) {
+  if (!NAMES.includes(who)) return null;
+  const card = book.cards[who];
+  if (!card) return null;
+  const photos = {};
+  for (const [index, photo] of Object.entries(album.photos[who] || {})) photos[index] = photo;
+  return {
+    app: BACKUP_TAG,
+    version: BACKUP_VERSION,
+    savedAt: new Date().toISOString(),
+    who,
+    card: { who, cells: card.cells.map(cell => ({ ...cell })), on: card.on.slice(),
+      celebrated: card.celebrated.slice(), started: card.started },
+    photos,
+  };
+}
+function backupName(who) { return `night-safari-bingo-${who}-${dayStamp(Date.now())}.json`; }
+// Strict on the way in: a file we cannot completely trust is refused, never half-applied.
+function validBackup(value) {
+  const no = reason => ({ ok: false, reason, message: BACKUP_TROUBLE[reason] || BACKUP_TROUBLE.shape });
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.app !== BACKUP_TAG) return no('shape');
+  if (!Number.isInteger(value.version)) return no('shape');
+  if (value.version !== BACKUP_VERSION) return no('version');
+  if (!NAMES.includes(value.who)) return no('player');
+  const card = validCard(value.card, value.who);
+  if (!card) return no('card');
+  const kept = value.photos;
+  if (kept !== undefined && (!kept || typeof kept !== 'object' || Array.isArray(kept))) return no('photos');
+  const photos = {};
+  let skipped = 0;
+  for (const [key, photo] of Object.entries(kept || {})) {
+    const index = /^\d+$/.test(key) ? Number(key) : -1;
+    // A single unreadable photo is dropped; the rest of the evening still comes home.
+    if (index >= 0 && index < CELLS && validPhoto(photo)) photos[index] = photo;
+    else skipped++;
+  }
+  return { ok: true, who: value.who, card, photos, skipped,
+    savedAt: typeof value.savedAt === 'string' ? value.savedAt : '' };
+}
+function readBackup(text) {
+  let value;
+  try { value = JSON.parse(String(text)); }
+  catch (_) { return { ok: false, reason: 'unreadable', message: BACKUP_TROUBLE.unreadable }; }
+  return validBackup(value);
+}
+// All of it or none of it. If either write is refused, the board goes back exactly as it was.
+function applyBackup(parsed) {
+  if (!parsed || !parsed.ok) return { ok: false, reason: 'bad' };
+  const who = parsed.who;
+  const hadCard = Object.prototype.hasOwnProperty.call(book.cards, who);
+  const beforeCard = book.cards[who];
+  const beforeActive = book.active;
+  const beforePhotos = album.photos[who];
+  book.cards[who] = parsed.card;
+  book.active = who;
+  album.photos[who] = { ...parsed.photos };
+  // Photos are the bulky write, so they go first: if there is no room we find out before touching the card.
+  const photoWrite = saveAlbum();
+  const cardWrite = photoWrite.ok ? save() : photoWrite;
+  if (!cardWrite.ok) {
+    if (hadCard) book.cards[who] = beforeCard; else delete book.cards[who];
+    book.active = beforeActive;
+    album.photos[who] = beforePhotos || {};
+    saveAlbum();                        // the old, smaller album fitted a moment ago
+    save();
+    return { ok: false, reason: cardWrite.reason || 'blocked' };
+  }
+  if (state && state.who === who) state = book.cards[who];
+  return { ok: true, who, photos: Object.keys(parsed.photos).length, skipped: parsed.skipped,
+    marked: parsed.card.on.filter(Boolean).length - 1 };
+}
+
 let book = loadBook();
 let album = loadAlbum();
 let state = null;
 
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(book)); storageOK = true; }
-  catch (_) { storageOK = false; }
+  try { localStorage.setItem(KEY, JSON.stringify(book)); storageOK = true; return { ok: true }; }
+  catch (error) { storageOK = false; return { ok: false, reason: isQuotaError(error) ? 'full' : 'blocked' }; }
 }
 function escapeHTML(value) {
   return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -261,7 +621,7 @@ function pickWho() {
     <p>A few furry faces. A few terrible puns. A pocket-sized collection of our night.</p>
     <p class="bingo-promise">Winner picks dessert. We share it.</p>
     <h2 class="bingo-picker-title">Whose bingo card?</h2>
-    <div class="who-pick">${NAMES.map(who => `<button class="btn ${who === 'YA' ? 'mint' : 'coral'}" data-player="${who}">${who}<small>${book.cards[who] ? 'Continue my card' : 'That’s me'}</small></button>`).join('')}</div>
+    <div class="who-pick">${NAMES.map(who => `<button class="btn ${who === NAMES[1] ? 'mint' : 'coral'}" data-player="${who}">${who}<small>${book.cards[who] ? 'Continue my card' : 'That’s me'}</small></button>`).join('')}</div>
     <p class="bingo-smallprint">Each phone saves its own cards and photos. Nothing is uploaded anywhere.</p>
   </div></div>`;
 }
@@ -274,6 +634,7 @@ function start(who, focus = false) {
   view = 'board';
   lightbox = null;
   notice = null;
+  keepsakeNote = null;
   save();
   render();
   if (focus) {
@@ -285,6 +646,12 @@ function getProgress(card) {
   const wins = LINES.filter(line => line.every(i => card.on[i]));
   const remaining = Math.min(...LINES.map(line => line.filter(i => !card.on[i]).length));
   return { wins, remaining, count: card.on.filter(Boolean).length - 1 };
+}
+// The honest line about where photos live. Said once per screen, never twice.
+function photoTruth(count) {
+  if (!count) return 'No photos yet. Tap a 📷 whenever something is worth keeping.';
+  const many = `${count} ${count === 1 ? 'photo' : 'photos'} tucked into this card, kept on this phone only.`;
+  return storageOK ? `${many} Worth saving at the end of the night.` : many;
 }
 function warmLine(count, photos) {
   if (count >= MOMENTS) return 'A whole card. Every square is a bit of tonight.';
@@ -355,10 +722,35 @@ function summaryHTML() {
         : '<p class="summary-empty">Nothing marked yet — there is still a whole night in front of you.</p>'}
       <p class="summary-supper"><span aria-hidden="true">🍨</span> Favourite animal? Funniest moment? One tiny thing to remember?</p>
     </div>
+    ${keepsakeHTML(photos)}
     <div class="bingo-aftercare">
       <button class="bingo-reset" data-action="board">← Back to the card</button>
     </div>
   </div>`;
+}
+
+// The one place the photos can be taken off this phone.
+function keepsakeWhy(photos) {
+  if (!photos) return storageOK
+    ? 'No photos on this card yet. Tap a 📷 on any square and they’ll gather here, ready to keep.'
+    : 'No photos on this card yet — and this browser isn’t keeping anything tonight, so any you add would go when this tab does.';
+  if (!storageOK) return 'This browser isn’t keeping anything tonight, so save these photos before you leave this page.';
+  return `Your ${photos === 1 ? 'photo lives' : 'photos live'} on this phone only. One tap tidies ${photos === 1 ? 'it' : 'them'} into a single picture for your camera roll.`;
+}
+function keepsakeHTML(photos) {
+  const label = working ? 'Making your picture…'
+    : `Save our photos${photos ? `<small>${photos} ${photos === 1 ? 'photo' : 'photos'}, one little picture</small>` : ''}`;
+  return `<div class="card bingo-keepsake">
+      <h2 class="keepsake-title">Take tonight with you</h2>
+      <p class="keepsake-why">${keepsakeWhy(photos)}</p>
+      <button type="button" class="keepsake-primary" data-action="keepsake"${photos && !working ? '' : ' disabled'}>${label}</button>
+      ${keepsakeNote ? `<p class="keepsake-note" role="status">${escapeHTML(keepsakeNote)}</p>` : ''}
+      <div class="keepsake-pair">
+        <button type="button" class="keepsake-minor" data-action="backup">Back up this card</button>
+        <button type="button" class="keepsake-minor" data-action="restore">Restore from a file</button>
+      </div>
+      <p class="keepsake-smallprint">A backup is one small file holding ${state.who}’s squares and photos — handy before a new phone. Restoring puts it all back.</p>
+    </div>`;
 }
 
 function boardHTML() {
@@ -386,14 +778,14 @@ function boardHTML() {
       <div class="score"><span>${count} <span class="muted">/ ${MOMENTS} little moments</span></span><span>${wins.length ? '♡ ' + wins.length + ' bingo' + (wins.length > 1 ? 's' : '') : 'Room for memories'}</span></div>
       <progress class="bingo-progress" max="${MOMENTS}" value="${count}" aria-label="${count} of ${MOMENTS} moments marked"></progress>
       <p class="bingo-note ${wins.length ? 'has-bingo' : ''}">${note}</p>
-      <p class="bingo-album-note">${photos ? `${photos} ${photos === 1 ? 'photo' : 'photos'} tucked into this card, kept on this phone only.` : 'No photos yet. Tap a 📷 whenever something is worth keeping.'}</p>
+      <p class="bingo-album-note">${photoTruth(photos)}</p>
     </div>
     <div class="bingo-aftercare">
-      <p class="bingo-save-note ${storageOK ? '' : 'save-warning'}">${storageOK ? 'Saved on this device. Switching players keeps both cards.<br>Cards don’t sync between phones.' : 'This browser can’t save right now. Keep this tab open so your moments aren’t lost.'}</p>
+      <p class="bingo-save-note ${storageOK ? '' : 'save-warning'}">${storageOK ? 'Saved on this device. Switching players keeps both cards.<br>Cards don’t sync between phones.' : 'This browser can’t save right now — a private window, most likely. Keep this tab open: tonight’s squares and photos won’t be kept.'}</p>
       <button class="bingo-summary-link" data-action="summary">See how our night went →</button>
       <details class="bingo-details"><summary>A tiny field guide</summary>
         <p>Wildlife squares have a mint edge; our little moments have a pink one. The middle is already yours—you showed up together.</p>
-        <p>Photos are shrunk and kept on this phone alone. Nothing is uploaded, and nothing is shared unless you show someone.</p>
+        <p>Photos are shrunk and kept on this phone alone. Nothing is uploaded, and nothing is shared unless you show someone. That also means clearing this browser takes them with it, so the end screen has a button that saves them all as one picture.</p>
         <p>Tick what happens naturally. A shy animal or an unfinished card doesn’t make the night any less lovely.</p>
         <p>Keep voices gentle, skip the flash, and follow the park’s signs. We’re guests in their home.</p>
       </details>
@@ -444,6 +836,7 @@ function showSummary(lead = '') {
 function showBoard() {
   if (!state) return;
   view = 'board';
+  keepsakeNote = null;
   render();
   app.querySelector('#bingo-heading').focus({ preventScroll: true });
 }
@@ -522,6 +915,106 @@ function dropPhoto() {
   announce(`Photo removed from ${label}. ${photoCount(state.who)} left in this card.`);
 }
 
+/* ---------- taking it all with you ---------- */
+function setKeepsake(message) {
+  keepsakeNote = message || null;
+  if (view === 'summary') render();
+  if (message) announce(message);
+}
+const KEEPSAKE_DONE = {
+  share: 'Sent on. Choose “Save Image” and the whole night lands in your camera roll.',
+  cancelled: 'No trouble at all — the picture is here whenever you want it.',
+  download: 'Saved as one picture. That’s the whole evening in a single file.',
+  tab: 'Opened in a new tab — press and hold the picture to save it to your phone.',
+  stuck: 'This browser wouldn’t hand the picture over. Try again from your usual browser?',
+};
+function saveKeepsake() {
+  if (!state || working) return;
+  const who = state.who;
+  if (!photoCount(who)) {
+    setKeepsake('No photos on this card yet — the 📷 on each square keeps one.');
+    return;
+  }
+  working = true;
+  setKeepsake('Putting your photos together…');
+  const finish = message => { working = false; setKeepsake(message); };
+  return Promise.resolve().then(() => composeSheet(who)).then(sheet => {
+    if (!sheet) return { how: 'nothing', missed: 0 };
+    return deliverImage(sheet.blob, keepsakeName(who, book.cards[who].started), {
+      title: 'Our Night Safari',
+      text: `${who}’s little collection from the Night Safari.`,
+    }).then(result => ({ how: result.how, missed: sheet.missed }));
+  }).then(result => {
+    if (result.how === 'nothing') { finish('Those photos wouldn’t open just now, so there was nothing to draw.'); return; }
+    const missed = result.missed
+      ? ` ${result.missed} photo${result.missed === 1 ? ' wouldn’t open, so it is' : 's wouldn’t open, so they are'} not on it.` : '';
+    finish((KEEPSAKE_DONE[result.how] || KEEPSAKE_DONE.stuck) + missed);
+  }, () => finish('That didn’t work out just now. Try again in a moment?'));
+}
+function saveBackup() {
+  if (!state) return;
+  const who = state.who;
+  const payload = backupOf(who);
+  if (!payload) { setKeepsake('There’s no card to back up yet.'); return; }
+  const photos = Object.keys(payload.photos).length;
+  const blob = makeBlob([JSON.stringify(payload)], 'application/json');
+  if (downloadBlob(blob, backupName(who))) {
+    setKeepsake(`Backed up ${who}’s card and ${photos} ${photos === 1 ? 'photo' : 'photos'} into one file. Keep it somewhere safe.`);
+    return;
+  }
+  if (openBlob(blob)) { setKeepsake('The backup opened in a new tab — save that page to keep it.'); return; }
+  setKeepsake('This browser wouldn’t hand over the file. Try again from your usual browser?');
+}
+function pickRestore() {
+  if (!state) return;
+  let input;
+  try { input = document.createElement('input'); } catch (_) { return; }
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.className = 'sr-only';
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    if (file) readRestoreFile(file);
+  });
+  input.click();
+}
+function readRestoreFile(file) {
+  return new Promise(resolve => {
+    const sorry = () => { setKeepsake(BACKUP_TROUBLE.unreadable); resolve(false); };
+    let reader;
+    try { reader = new FileReader(); } catch (_) { sorry(); return; }
+    reader.onerror = sorry;
+    reader.onload = () => resolve(takeBackup(String(reader.result)));
+    try { reader.readAsText(file); } catch (_) { sorry(); }
+  });
+}
+// Ask before replacing anything, and say plainly whose card it was.
+function takeBackup(text) {
+  const parsed = readBackup(text);
+  if (!parsed.ok) { setKeepsake(parsed.message); return false; }
+  const who = parsed.who;
+  const other = NAMES.find(name => name !== who);
+  if (book.cards[who] && !confirm(
+    `Put this backup back for ${who}? ${who}’s squares and photos on this phone are replaced. ${other}’s card stays safe.`)) {
+    setKeepsake('Left everything exactly as it was.');
+    return false;
+  }
+  const done = applyBackup(parsed);
+  if (!done.ok) {
+    setKeepsake(done.reason === 'full'
+      ? 'There isn’t room on this phone for that backup, so nothing was changed.'
+      : 'This browser won’t save right now, so nothing was changed.');
+    return false;
+  }
+  start(who, true);
+  const skipped = done.skipped
+    ? ` ${done.skipped} photo${done.skipped === 1 ? '' : 's'} in the file couldn’t be read.` : '';
+  notice = `${who}’s card is back: ${done.marked} of ${MOMENTS} squares and ${done.photos} ${done.photos === 1 ? 'photo' : 'photos'}.${skipped}`;
+  render();
+  announce(notice);
+  return true;
+}
+
 function celebrate() {
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   // One brief, quiet celebration; no sound, vibration, or blocking dialog.
@@ -547,7 +1040,8 @@ function celebrate() {
   }
 }
 
-const ACTIONS = { reset, summary: showSummary, board: showBoard, 'close-photo': closePhoto, 'remove-photo': dropPhoto };
+const ACTIONS = { reset, summary: showSummary, board: showBoard, 'close-photo': closePhoto, 'remove-photo': dropPhoto,
+  keepsake: saveKeepsake, backup: saveBackup, restore: pickRestore };
 app.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button || !app.contains(button)) return;

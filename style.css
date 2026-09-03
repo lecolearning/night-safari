@@ -81,6 +81,7 @@ p{line-height:1.55;margin:0 0 12px}
 .btn.paper{background:var(--paper)}
 .btn.coral{background:var(--coral)}
 .btn.mint{background:var(--mint)}
+.btn.lilac{background:var(--lilac)}
 .btn+.btn{margin-top:12px}
 .stack{display:flex;flex-direction:column;gap:12px}
 
@@ -266,6 +267,22 @@ footer.credit a{color:var(--lilac)}
 .summary-photo-tag{font-size:11px;font-weight:800;color:#835039;white-space:nowrap}
 .summary-empty{font-size:13px;line-height:1.6;color:var(--ink-soft)}
 .summary-supper{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:0;padding-top:12px;border-top:1px dashed rgba(43,35,64,.3)}
+
+/* ---------- taking the photos with you ---------- */
+.bingo-keepsake{text-align:center;margin-top:16px;padding:18px 14px 16px;background:var(--paper2)}
+.keepsake-title{font-size:clamp(18px,4.6vw,23px);margin:0 0 8px}
+.keepsake-why{font-size:13px;line-height:1.55;color:var(--ink-soft);margin:0 0 14px}
+.keepsake-primary{font:inherit;font-size:16px;font-weight:800;cursor:pointer;width:100%;min-height:52px;padding:12px 18px;
+  color:var(--ink);background:var(--gold);border:var(--border);border-radius:16px 13px 17px 14px / 14px 17px 13px 16px;box-shadow:3px 4px 0 rgba(0,0,0,.3)}
+.keepsake-primary small{display:block;font-size:12px;font-weight:700;margin-top:3px;color:#6b5527}
+.keepsake-primary:active{transform:translate(2px,3px);box-shadow:1px 1px 0 rgba(0,0,0,.3)}
+.keepsake-primary[disabled]{cursor:default;opacity:.55;box-shadow:2px 2px 0 rgba(0,0,0,.18);transform:none}
+.keepsake-note{font-size:13px;font-weight:800;line-height:1.5;color:var(--ink);background:#fff;border:var(--border);border-radius:12px;padding:10px 12px;margin:12px 0 0}
+.keepsake-pair{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:14px 0 0}
+.keepsake-minor{font:inherit;font-size:13px;font-weight:800;cursor:pointer;flex:1 1 140px;min-height:44px;padding:10px 14px;
+  color:var(--ink);background:#fff;border:1.5px solid var(--ink);border-radius:999px}
+.keepsake-minor:active{transform:translate(1px,1px)}
+.keepsake-smallprint{font-size:11px;line-height:1.5;color:var(--ink-soft);margin:10px 0 0}
 @media(max-width:380px){
   .bingo-page .wrap{padding-left:10px;padding-right:10px}
   .bingo-card{padding-left:8px;padding-right:8px}

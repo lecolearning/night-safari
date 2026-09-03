@@ -27,7 +27,7 @@ function quotaError() {
 // Minimal DOM boundary: exercise the real script, event handlers and rendered HTML
 // without a browser dependency. These tests do not claim to measure browser layout.
 function boot({ search = '', stored = new Map(), storageDenied = false, fullKeys = [],
-  reducedMotion = true, confirmResult = false } = {}) {
+  reducedMotion = true, confirmResult = false, people = null } = {}) {
   const listeners = {};
   const docListeners = {};
   const focused = [];
@@ -45,6 +45,7 @@ function boot({ search = '', stored = new Map(), storageDenied = false, fullKeys
     },
   };
   const context = vm.createContext({
+    ...(people ? { PEOPLE: people } : {}),
     URLSearchParams,
     location: { search },
     localStorage: {
@@ -86,6 +87,35 @@ function boot({ search = '', stored = new Map(), storageDenied = false, fullKeys
 function fullCard(who = 'XJ') {
   return { who, cells: Array.from({ length: CELLS }, (_, i) => ({ icon: '🐾', label: `Moment ${i}`, kind: 'together' })),
     on: Array.from({ length: CELLS }, (_, i) => i < 4 || i === FREE), celebrated: [0] };
+}
+
+// The handful of browser bits a file needs to leave the phone: blobs, object URLs, a share sheet.
+// Everything a real browser would do is recorded in `tally` instead of actually happening.
+function equip(page, { share = 'none', download = true, tab = true } = {}) {
+  page.run(`
+    globalThis.tally = { made: 0, live: [], revoked: [], shared: [], opened: [] };
+    globalThis.Blob = function (parts, options) { this.parts = parts; this.type = (options || {}).type || ''; };
+    globalThis.File = function (parts, name, options) {
+      this.parts = parts; this.name = name; this.type = (options || {}).type || '';
+    };
+    globalThis.URL = {
+      createObjectURL() { const url = 'blob:' + (tally.made++); tally.live.push(url); return url; },
+      revokeObjectURL(url) { tally.revoked.push(url); tally.live = tally.live.filter(one => one !== url); },
+    };
+    canDownload = () => ${Boolean(download)};
+    window.open = ${tab ? "url => { tally.opened.push(url); return {}; }" : '() => null'};
+  `);
+  const sheets = {
+    cannot: 'globalThis.navigator = { share: () => Promise.resolve(), canShare: () => false };',
+    ok: `globalThis.navigator = { canShare: () => true,
+      share: data => { tally.shared.push(data.files[0].name); return Promise.resolve(); } };`,
+    cancel: `globalThis.navigator = { canShare: () => true, share: () => {
+      const stop = Error('Share canceled'); stop.name = 'AbortError'; return Promise.reject(stop); } };`,
+    broken: `globalThis.navigator = { canShare: () => true,
+      share: () => Promise.reject(Error('not permitted here')) };`,
+  };
+  if (sheets[share]) page.run(sheets[share]);
+  return page;
 }
 
 /* ---------- the board ---------- */
@@ -647,6 +677,509 @@ test('switching player from the summary returns to that player’s board', () =>
   assert.equal(page.read('lightbox'), null);
 });
 
+/* ---------- one keepsake image ---------- */
+
+test('the contact sheet lays out one photo through sixteen without breaking', () => {
+  const page = boot();
+  for (const nothing of ['sheetLayout(0)', 'sheetLayout(-3)', 'sheetLayout(NaN)', 'sheetLayout(0.4)',
+    "sheetLayout('lots')", 'sheetLayout(null)']) {
+    assert.equal(page.read(nothing), null, nothing);
+  }
+  assert.equal(page.read('sheetLayout(99).frames.length'), CELLS, 'a card only ever holds sixteen');
+
+  for (let count = 1; count <= CELLS; count++) {
+    const layout = page.read(`sheetLayout(${count})`);
+    const where = `${count} photo(s)`;
+    assert.equal(layout.width, 1080, where);
+    assert.equal(layout.frames.length, count, where);
+    assert.ok(layout.cols >= 1 && layout.cols <= 4, `${where}: ${layout.cols} columns`);
+    assert.ok(layout.rows * layout.cols >= count && (layout.rows - 1) * layout.cols < count, where);
+    // Tall enough for the title, the rows and the warm line, and never an absurd scroll.
+    assert.ok(layout.height > 700 && layout.height < 2600, `${where}: ${layout.height}px tall`);
+    assert.ok(layout.height / layout.width < 2.4, `${where}: too long and thin`);
+    assert.ok(layout.photo.w >= 180 && layout.photo.w === layout.photo.h, `${where}: ${layout.photo.w}px photos`);
+    assert.equal(layout.cell.h, layout.photo.h + 24 + 46, where);
+
+    for (const frame of layout.frames) {
+      assert.equal(frame.w, layout.cell.w, where);
+      assert.equal(frame.h, layout.cell.h, where);
+      assert.ok(frame.x >= 8 && frame.x + frame.w <= layout.width - 8, `${where}: off the side`);
+      assert.ok(frame.y >= 150, `${where}: sitting on the title`);
+      assert.ok(frame.y + frame.h <= layout.height - 100, `${where}: sitting on the warm line`);
+      assert.ok(Math.abs(frame.tilt) > 0 && Math.abs(frame.tilt) <= 2.5, `${where}: ${frame.tilt}deg is not a gentle tilt`);
+    }
+    // No two polaroids share a patch of paper.
+    for (let a = 0; a < count; a++) {
+      for (let b = a + 1; b < count; b++) {
+        const one = layout.frames[a];
+        const two = layout.frames[b];
+        const apart = one.x + one.w <= two.x || two.x + two.w <= one.x ||
+          one.y + one.h <= two.y || two.y + two.h <= one.y;
+        assert.ok(apart, `${where}: frames ${a} and ${b} overlap`);
+      }
+    }
+    // Every row, including a short last one, is centred on the page.
+    const byRow = new Map();
+    for (const frame of layout.frames) byRow.set(frame.row, [...(byRow.get(frame.row) || []), frame]);
+    for (const [row, frames] of byRow) {
+      const left = Math.min(...frames.map(frame => frame.x));
+      const right = Math.max(...frames.map(frame => frame.x + frame.w));
+      assert.ok(Math.abs((left + right) / 2 - layout.width / 2) <= 1, `${where}: row ${row} is off-centre`);
+    }
+  }
+  // The tilt alternates, so the sheet reads as taped in rather than machine-set.
+  const tilts = page.read('sheetLayout(16).frames').map(frame => frame.tilt);
+  for (let i = 1; i < tilts.length; i++) assert.ok(tilts[i] * tilts[i - 1] < 0, 'tilts alternate');
+});
+
+test('long square labels are trimmed cleanly under each photo', () => {
+  const page = boot();
+  assert.equal(page.read("clipLabel('Short one', 20)"), 'Short one');
+  assert.equal(page.read("clipLabel('  spaced   out  ', 40)"), 'spaced out');
+  for (const empty of ['clipLabel(null, 20)', 'clipLabel(undefined, 20)', "clipLabel('', 20)", "clipLabel('   ', 20)"]) {
+    assert.equal(page.read(empty), '', empty);
+  }
+  // A word boundary is preferred when one is close enough to the end.
+  assert.equal(page.read("clipLabel('Two animals sitting close together', 24)"), 'Two animals sitting…');
+  // One unbroken word is still cut rather than allowed to run off the polaroid.
+  assert.equal(page.read(`clipLabel('${'z'.repeat(60)}', 12)`), 'z'.repeat(11) + '…');
+  const long = 'An Asian small-clawed otter having a lovely time';
+  const cut = page.read(`clipLabel(${JSON.stringify(long)}, 20)`);
+  assert.ok(cut.length <= 20, `"${cut}" is ${cut.length} characters`);
+  assert.match(cut, /…$/);
+  assert.doesNotMatch(cut, /[\s,.;:!?-]…$/, 'no dangling space or comma before the ellipsis');
+  assert.ok(long.startsWith(cut.slice(0, -1)), 'the trim keeps the front of the label');
+  // Every real label fits its caption at every sheet width.
+  const labels = [...page.read('WILDLIFE'), ...page.read('TOGETHER'), page.read('FREE_CELL')].map(cell => cell.label);
+  for (const count of [1, 4, 9, 16]) {
+    const layout = page.read(`sheetLayout(${count})`);
+    assert.ok(layout.labelMax >= 12 && layout.labelMax <= 34, `labelMax ${layout.labelMax}`);
+    for (const label of [...labels, 'x'.repeat(32), 'A truly enormous label that nobody could ever type']) {
+      const text = page.read(`clipLabel(${JSON.stringify(label)}, ${layout.labelMax})`);
+      assert.ok(text.length > 0 && text.length <= layout.labelMax, `"${text}" at ${count} photos`);
+      assert.ok(text.length * layout.labelSize * 0.55 <= layout.cell.w - 12,
+        `"${text}" is wider than a ${layout.cell.w}px polaroid`);
+    }
+  }
+});
+
+test('photos are centre-cropped to fill their square without squashing anyone', () => {
+  const page = boot();
+  assert.deepEqual(page.read('coverRect(640, 480, 200, 200)'), { x: 80, y: 0, w: 480, h: 480 });
+  assert.deepEqual(page.read('coverRect(480, 640, 200, 200)'), { x: 0, y: 80, w: 480, h: 480 });
+  assert.deepEqual(page.read('coverRect(300, 300, 225, 225)'), { x: 0, y: 0, w: 300, h: 300 });
+  for (const bad of ['coverRect(0, 100, 10, 10)', 'coverRect(100, 0, 10, 10)', 'coverRect(100, 100, 0, 10)',
+    'coverRect(NaN, 100, 10, 10)']) {
+    assert.equal(page.read(bad), null, bad);
+  }
+});
+
+test('a photo that will not decode is left out rather than spoiling the whole sheet', async () => {
+  const page = boot({ search: '?who=XJ' });
+  const fine = jpeg(20);
+  const shy = jpeg(26);
+  page.run(`setPhoto('XJ', 0, ${JSON.stringify(fine)}); setPhoto('XJ', 1, ${JSON.stringify(shy)});
+    setPhoto('XJ', 2, ${JSON.stringify(fine)})`);
+  page.run(`
+    globalThis.sketch = null;
+    loadPhoto = url => Promise.resolve(url === ${JSON.stringify(shy)} ? null : { naturalWidth: 640, naturalHeight: 480 });
+    drawSheet = (ctx, layout, items, meta) => { sketch = { count: items.length,
+      labels: items.map(item => item.label), height: layout.height, meta }; };
+    canvasBlob = () => Promise.resolve({ drawnAt: Date.now() });
+    document.createElement = tag => ({ tag, getContext: () => ({}) });
+  `);
+  const sheet = await page.run("composeSheet('XJ')");
+  assert.equal(sheet.drawn, 2);
+  assert.equal(sheet.missed, 1);
+  const sketch = page.read('sketch');
+  assert.equal(sketch.count, 2);
+  assert.deepEqual(sketch.labels, [page.read('state.cells[0].label'), page.read('state.cells[2].label')]);
+  assert.match(sketch.meta.subtitle, /^XJ’s little collection · \d+ \w+ \d{4}$/);
+  assert.ok(sketch.meta.warm.length > 20);
+
+  page.run('loadPhoto = () => Promise.resolve(null)');
+  assert.equal(await page.run("composeSheet('XJ')"), null, 'not one photo opened, so there is nothing to draw');
+  assert.equal(await page.run("composeSheet('YA')"), null, 'a player with no card has no sheet');
+});
+
+test('a full sixteen photos all reach the sheet, in board order', async () => {
+  const page = boot({ search: '?who=XJ' });
+  page.run(`for (let i = 0; i < 16; i++) setPhoto('XJ', i, 'data:image/jpeg;base64,' + 'A'.repeat(20 + i * 4) + '==')`);
+  assert.equal(page.read("photoCount('XJ')"), CELLS);
+  page.run(`
+    globalThis.sketch = null;
+    loadPhoto = () => Promise.resolve({ naturalWidth: 640, naturalHeight: 640 });
+    drawSheet = (ctx, layout, items) => { sketch = { count: items.length, indexes: items.map(item => item.index),
+      frames: layout.frames.length, height: layout.height }; };
+    canvasBlob = () => Promise.resolve({ ok: true });
+    document.createElement = tag => ({ tag, getContext: () => ({}) });
+  `);
+  const sheet = await page.run("composeSheet('XJ')");
+  assert.equal(sheet.drawn, CELLS);
+  assert.equal(sheet.missed, 0);
+  const sketch = page.read('sketch');
+  assert.equal(sketch.frames, CELLS);
+  assert.deepEqual(sketch.indexes, Array.from({ length: CELLS }, (_, i) => i));
+});
+
+test('the end screen offers the keepsake, and explains itself when there is nothing to save', () => {
+  const empty = boot({ search: '?who=XJ' });
+  empty.click({ action: 'summary' });
+  assert.match(empty.app.innerHTML, /data-action="keepsake"[^>]*disabled/);
+  assert.match(empty.app.innerHTML, /No photos on this card yet/);
+  empty.click({ action: 'keepsake' });
+  assert.match(empty.announcement.textContent, /No photos on this card yet/);
+  assert.equal(empty.created.length, 0, 'an empty card draws nothing at all');
+
+  const page = boot({ search: '?who=XJ' });
+  page.run(`setPhoto('XJ', 0, ${JSON.stringify(jpeg(24))})`);
+  page.click({ action: 'summary' });
+  assert.doesNotMatch(page.app.innerHTML, /data-action="keepsake"[^>]*disabled/);
+  assert.match(page.app.innerHTML, /1 photo, one little picture/);
+  assert.match(page.app.innerHTML, /photo lives on this phone only/, 'the note is in the singular');
+  assert.match(page.app.innerHTML, /data-action="backup"/);
+  assert.match(page.app.innerHTML, /data-action="restore"/);
+  assert.equal(page.app.innerHTML.includes('data-cell='), false, 'still no grid on the end screen');
+});
+
+test('a saved keepsake prefers the share sheet, then a download, then a new tab', async () => {
+  const make = "makeBlob(['x'], 'image/jpeg'), 'ours.jpg', { title: 'Our Night Safari', text: 'hello' }";
+
+  const shared = equip(boot(), { share: 'ok' });
+  assert.equal((await shared.run(`deliverImage(${make})`)).how, 'share');
+  assert.deepEqual(shared.read('tally.shared'), ['ours.jpg']);
+  assert.equal(shared.created.length, 0, 'a successful share starts no download');
+
+  // Backing out of the share sheet is a normal thing to do, not a failure.
+  const bailed = equip(boot(), { share: 'cancel' });
+  assert.equal((await bailed.run(`deliverImage(${make})`)).how, 'cancelled');
+  assert.equal(bailed.created.length, 0, 'cancelling does not fall through to a download');
+
+  // A share that genuinely breaks does fall through.
+  const broke = equip(boot(), { share: 'broken' });
+  assert.equal((await broke.run(`deliverImage(${make})`)).how, 'download');
+
+  const down = equip(boot(), { share: 'cannot' });
+  assert.equal((await down.run(`deliverImage(${make})`)).how, 'download');
+  const anchor = down.created.at(-1);
+  assert.equal(anchor.tag, 'a');
+  assert.equal(anchor.download, 'ours.jpg');
+  assert.equal(anchor.href, 'blob:0');
+  assert.equal(anchor.clicks, 1);
+  assert.deepEqual(down.read('tally.live'), ['blob:0'], 'the URL lives until the browser has taken the file');
+  down.timers.forEach(callback => callback());
+  assert.deepEqual(down.read('tally.revoked'), ['blob:0'], 'and is revoked afterwards');
+  assert.deepEqual(down.read('tally.live'), []);
+
+  const tab = equip(boot(), { download: false });
+  assert.equal((await tab.run(`deliverImage(${make})`)).how, 'tab');
+  assert.deepEqual(tab.read('tally.opened'), ['blob:0']);
+
+  const stuck = equip(boot(), { download: false, tab: false });
+  assert.equal((await stuck.run(`deliverImage(${make})`)).how, 'stuck');
+
+  const page = boot();
+  for (const quiet of ['wasCancelled(null)', "wasCancelled({ name: 'AbortError' })",
+    "wasCancelled({ message: 'Share canceled' })", "wasCancelled({ message: 'user aborted' })"]) {
+    assert.equal(page.read(quiet), true, quiet);
+  }
+  for (const real of ["wasCancelled({ name: 'NotAllowedError', message: 'no gesture' })",
+    "wasCancelled({ name: 'TypeError', message: 'bad file' })"]) {
+    assert.equal(page.read(real), false, real);
+  }
+  assert.match(page.read("keepsakeName('XJ', 0)"), /^night-safari-XJ-1970-01-01\.jpg$/);
+  assert.equal(page.read("keepsakeName('YA', NaN)"), 'night-safari-YA-night.jpg');
+  assert.ok(page.read('warmSheetLine(1)') !== page.read('warmSheetLine(16)'));
+});
+
+test('saving the keepsake says how it went, and never leaves the button stuck', async () => {
+  const stubs = `
+    loadPhoto = () => Promise.resolve({ naturalWidth: 640, naturalHeight: 480 });
+    drawSheet = () => {};
+    document.createElement = tag => ({ tag, getContext: () => ({}), click() {}, addEventListener() {} });
+  `;
+  const page = equip(boot({ search: '?who=XJ' }), { share: 'ok' });
+  page.run(`setPhoto('XJ', 0, ${JSON.stringify(jpeg(20))}); setPhoto('XJ', 1, ${JSON.stringify(jpeg(24))})`);
+  page.run(`${stubs}
+    globalThis.release = null;
+    canvasBlob = () => new Promise(resolve => { release = () => resolve(makeBlob(['x'], 'image/jpeg')); });
+  `);
+  page.click({ action: 'summary' });
+  const saving = page.run('saveKeepsake()');
+  assert.equal(page.read('working'), true);
+  assert.match(page.app.innerHTML, /Making your picture…/);
+  assert.match(page.app.innerHTML, /data-action="keepsake"[^>]*disabled/, 'no double-tapping mid-draw');
+  page.click({ action: 'keepsake' });                      // a second tap while drawing is ignored
+  await new Promise(resolve => setImmediate(resolve));     // let the photos finish decoding
+  page.run('release()');
+  await saving;
+  assert.equal(page.read('working'), false);
+  assert.match(page.read('keepsakeNote'), /Save Image/);
+  assert.match(page.read('tally.shared')[0], /^night-safari-XJ-\d{4}-\d{2}-\d{2}\.jpg$/);
+  assert.doesNotMatch(page.app.innerHTML, /data-action="keepsake"[^>]*disabled/, 'and it is offered again');
+
+  // Backing out of the share sheet reads as a shrug, not a failure, and one shy photo is owned up to.
+  const shy = jpeg(26);
+  const bailed = equip(boot({ search: '?who=XJ' }), { share: 'cancel' });
+  bailed.run(`setPhoto('XJ', 0, ${JSON.stringify(jpeg(20))}); setPhoto('XJ', 1, ${JSON.stringify(shy)})`);
+  bailed.run(`${stubs}
+    loadPhoto = url => Promise.resolve(url === ${JSON.stringify(shy)} ? null : { naturalWidth: 640, naturalHeight: 480 });
+    canvasBlob = () => Promise.resolve(makeBlob(['x'], 'image/jpeg'));
+  `);
+  bailed.click({ action: 'summary' });
+  await bailed.run('saveKeepsake()');
+  assert.equal(bailed.read('working'), false);
+  assert.match(bailed.read('keepsakeNote'), /No trouble at all/);
+  assert.match(bailed.read('keepsakeNote'), /1 photo wouldn’t open/);
+  for (const alarming of ['Error', 'error', 'failed']) {
+    assert.equal(bailed.read('keepsakeNote').includes(alarming), false, alarming);
+  }
+
+  // If drawing itself gives up, the button comes back rather than sulking forever.
+  const sad = equip(boot({ search: '?who=XJ' }), { share: 'ok' });
+  sad.run(`setPhoto('XJ', 0, ${JSON.stringify(jpeg(20))})`);
+  sad.run(`${stubs} composeSheet = () => Promise.reject(Error('no canvas here'));`);
+  sad.click({ action: 'summary' });
+  await sad.run('saveKeepsake()');
+  assert.equal(sad.read('working'), false);
+  assert.match(sad.read('keepsakeNote'), /Try again in a moment/);
+});
+
+/* ---------- a backup you can hold ---------- */
+
+test('a backup file holds one player’s card, marks and photos, and nothing else', () => {
+  const page = boot({ search: '?who=XJ' });
+  const mine = jpeg(30);
+  const theirs = jpeg(44);
+  page.run(`toggle(0); toggle(1); setPhoto('XJ', 0, ${JSON.stringify(mine)});
+    start('YA'); toggle(3); setPhoto('YA', 3, ${JSON.stringify(theirs)}); start('XJ')`);
+  const backup = page.read("backupOf('XJ')");
+  assert.equal(backup.app, 'ns-bingo');
+  assert.equal(backup.version, 1);
+  assert.equal(backup.who, 'XJ');
+  assert.match(backup.savedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(backup.card.who, 'XJ');
+  assert.equal(backup.card.cells.length, CELLS);
+  assert.deepEqual(backup.card.on, page.read('book.cards.XJ.on'));
+  assert.deepEqual(backup.card.celebrated, []);
+  assert.ok(backup.card.started > 0, 'the night the card began travels with it');
+  assert.deepEqual(Object.keys(backup.photos), ['0']);
+  assert.equal(backup.photos[0], mine);
+  assert.equal(JSON.stringify(backup).includes(theirs), false, 'the other player is not in this file');
+  assert.equal(page.read("backupOf('ZZ')"), null);
+  assert.equal(boot().read("backupOf('XJ')"), null, 'no card, no backup');
+  assert.match(page.read("backupName('XJ')"), /^night-safari-bingo-XJ-\d{4}-\d{2}-\d{2}\.json$/);
+
+  // It survives its own round trip, exactly.
+  const back = page.read(`validBackup(${JSON.stringify(backup)})`);
+  assert.equal(back.ok, true);
+  assert.equal(back.who, 'XJ');
+  assert.equal(back.skipped, 0);
+  assert.deepEqual(back.card, page.read('book.cards.XJ'));
+  assert.deepEqual(back.photos, { 0: mine });
+});
+
+test('a restore file is checked strictly and refused kindly, one reason at a time', () => {
+  const page = boot({ search: '?who=XJ' });
+  const good = () => ({ app: 'ns-bingo', version: 1, savedAt: '2026-09-03T12:00:00.000Z', who: 'XJ',
+    card: fullCard('XJ'), photos: { 3: jpeg(20) } });
+  const check = value => page.read(`validBackup(${JSON.stringify(value)})`);
+  const twist = change => { const value = good(); change(value); return value; };
+
+  const refusals = [
+    ['shape', null], ['shape', 42], ['shape', 'a string'], ['shape', []], ['shape', {}],
+    ['shape', twist(value => { value.app = 'something-else'; })],
+    ['shape', twist(value => { delete value.app; })],
+    ['shape', twist(value => { value.version = '1'; })],
+    ['shape', twist(value => { value.version = 1.5; })],
+    ['shape', twist(value => { delete value.version; })],
+    ['version', twist(value => { value.version = 2; })],       // a file from a newer card
+    ['version', twist(value => { value.version = 99; })],
+    ['version', twist(value => { value.version = 0; })],
+    ['player', twist(value => { value.who = 'Bob'; })],
+    ['player', twist(value => { value.who = '__proto__'; })],
+    ['player', twist(value => { delete value.who; })],
+    ['card', twist(value => { delete value.card; })],
+    ['card', twist(value => { value.card = null; })],
+    ['card', twist(value => { value.card.cells.pop(); })],
+    ['card', twist(value => { value.card.on[0] = 'yes'; })],
+    ['card', twist(value => { value.card.who = 'YA'; })],       // the card must belong to the named player
+    ['card', twist(value => { value.card.cells[2].label = 'x'.repeat(33); })],
+    ['photos', twist(value => { value.photos = 'nope'; })],
+    ['photos', twist(value => { value.photos = []; })],
+    ['photos', twist(value => { value.photos = null; })],
+  ];
+  for (const [reason, value] of refusals) {
+    const result = check(value);
+    assert.equal(result.ok, false, `${reason}: ${JSON.stringify(value).slice(0, 60)}`);
+    assert.equal(result.reason, reason, JSON.stringify(value).slice(0, 70));
+    assert.ok(result.message.length > 20, reason);
+    assert.match(result.message, /[Nn]othing has changed/, reason);
+  }
+  assert.equal(check(undefined).ok, false);
+  assert.equal(page.stored.get(KEY) !== undefined && page.stored.size <= 1, true, 'checking a file writes nothing');
+
+  // Unreadable text never throws; it comes back as a polite refusal.
+  for (const raw of ["readBackup('{not json')", 'readBackup(undefined)', "readBackup('')",
+    "readBackup('<html>')"]) {
+    assert.equal(page.read(raw).reason, 'unreadable', raw);
+  }
+  assert.equal(page.read("readBackup('null')").reason, 'shape');
+  assert.equal(page.read(`readBackup(${JSON.stringify(JSON.stringify(good()))})`).ok, true);
+
+  // A photo missing an eye is dropped; the rest of the evening still comes home.
+  const messy = twist(value => {
+    value.photos = { 0: jpeg(20), 1: 'data:image/jpeg;base64,<script>', 2: 'javascript:alert(1)',
+      3: 'data:image/png;base64,QUJD', 99: jpeg(8), later: jpeg(8) };
+  });
+  const salvaged = check(messy);
+  assert.equal(salvaged.ok, true);
+  assert.deepEqual(Object.keys(salvaged.photos), ['0']);
+  assert.equal(salvaged.skipped, 5);
+  const none = check(twist(value => { delete value.photos; }));
+  assert.equal(none.ok, true);
+  assert.deepEqual(none.photos, {});
+});
+
+test('a confirmed restore brings back one player’s squares and photos, and only theirs', () => {
+  const source = boot({ search: '?who=XJ' });
+  source.run(`[0,1,2].forEach(toggle); setPhoto('XJ', 0, ${JSON.stringify(jpeg(24))});
+    setPhoto('XJ', 1, ${JSON.stringify(jpeg(28))})`);
+  const file = JSON.stringify(source.read("backupOf('XJ')"));
+  const wanted = source.read('book.cards.XJ');
+
+  const page = boot({ search: '?who=XJ', confirmResult: true });
+  page.run(`toggle(7); start('YA'); toggle(11); setPhoto('YA', 11, ${JSON.stringify(jpeg(20))})`);
+  const ya = page.read('book.cards.YA');
+  page.click({ action: 'summary' });
+  assert.equal(page.run(`takeBackup(${JSON.stringify(file)})`), true);
+  assert.equal(page.confirmations.length, 1, 'an existing card is never replaced without asking');
+  assert.match(page.confirmations[0], /XJ’s squares and photos/);
+  assert.match(page.confirmations[0], /YA’s card stays safe/);
+  assert.deepEqual(page.read('book.cards.XJ'), wanted);
+  assert.deepEqual(page.read('book.cards.YA'), ya, 'the other player is untouched');
+  assert.equal(page.read("photoCount('XJ')"), 2);
+  assert.equal(page.read("photoCount('YA')"), 1);
+  assert.equal(page.read('state.who'), 'XJ');
+  assert.equal(page.read('view'), 'board');
+  assert.match(page.app.innerHTML, /XJ’s card is back: 3 of 15 squares and 2 photos/);
+  assert.match(page.announcement.textContent, /XJ’s card is back/);
+
+  const reloaded = boot({ stored: page.stored });
+  assert.deepEqual(reloaded.read('book.cards.XJ'), wanted, 'and it is still there after a reload');
+  assert.equal(reloaded.read("photoCount('XJ')"), 2);
+  assert.equal(reloaded.read("photoCount('YA')"), 1);
+});
+
+test('declining the question changes nothing at all', () => {
+  const source = boot({ search: '?who=XJ' });
+  source.run('toggle(4)');
+  const file = JSON.stringify(source.read("backupOf('XJ')"));
+
+  const page = boot({ search: '?who=XJ', confirmResult: false });
+  page.run(`toggle(9); setPhoto('XJ', 9, ${JSON.stringify(jpeg(20))})`);
+  const before = page.read('book');
+  const album = page.read('album');
+  assert.equal(page.run(`takeBackup(${JSON.stringify(file)})`), false);
+  assert.equal(page.confirmations.length, 1);
+  assert.deepEqual(page.read('book'), before);
+  assert.deepEqual(page.read('album'), album);
+  assert.match(page.read('keepsakeNote'), /exactly as it was/);
+});
+
+test('a backup for the other player restores their card without touching yours', () => {
+  const source = boot({ search: '?who=YA' });
+  source.run(`toggle(3); setPhoto('YA', 3, ${JSON.stringify(jpeg(20))})`);
+  const file = JSON.stringify(source.read("backupOf('YA')"));
+
+  const page = boot({ search: '?who=XJ', confirmResult: true });
+  const xj = page.read('book.cards.XJ');
+  assert.equal(page.run(`takeBackup(${JSON.stringify(file)})`), true);
+  assert.equal(page.confirmations.length, 0, 'there was no YA card here, so there was nothing to ask about');
+  assert.equal(page.read('state.who'), 'YA');
+  assert.deepEqual(page.read('book.cards.XJ'), xj, 'XJ’s card is left exactly alone');
+  assert.equal(page.read("photoCount('YA')"), 1);
+  assert.equal(page.read("photoCount('XJ')"), 0);
+  assert.match(page.announcement.textContent, /YA’s card is back/);
+});
+
+test('a restore that will not fit puts the card and the album back exactly as they were', () => {
+  const source = boot({ search: '?who=XJ' });
+  source.run(`[1,2,3].forEach(toggle); setPhoto('XJ', 1, ${JSON.stringify(jpeg(400))})`);
+  const file = JSON.stringify(source.read("backupOf('XJ')"));
+
+  // The photos are the bulky write, so a full phone is discovered before the card is touched.
+  const full = boot({ search: '?who=XJ', confirmResult: true });
+  full.run(`toggle(9); setPhoto('XJ', 9, ${JSON.stringify(jpeg(20))})`);
+  const bookBefore = full.read('book');
+  const albumBefore = full.read('album');
+  const diskBefore = new Map(full.stored);
+  full.run('localStorage.setItem = () => { const e = Error("full"); e.name = "QuotaExceededError"; throw e; }');
+  assert.equal(full.run(`takeBackup(${JSON.stringify(file)})`), false);
+  assert.deepEqual(full.read('book'), bookBefore, 'the board is never half-written');
+  assert.deepEqual(full.read('album'), albumBefore);
+  assert.equal(full.read('state.on[9]'), true);
+  assert.deepEqual([...full.stored], [...diskBefore]);
+  assert.match(full.read('keepsakeNote'), /isn’t room on this phone/);
+  assert.match(full.read('keepsakeNote'), /nothing was changed/);
+
+  // And if the card write is the one that fails, the album is put back too.
+  const card = boot({ search: '?who=XJ', confirmResult: true, fullKeys: [KEY] });
+  card.run(`toggle(9); setPhoto('XJ', 9, ${JSON.stringify(jpeg(20))})`);
+  const keptBook = card.read('book');
+  const keptAlbum = card.read('album');
+  const keptDisk = card.stored.get(PHOTO_KEY);
+  assert.equal(card.run(`takeBackup(${JSON.stringify(file)})`), false);
+  assert.deepEqual(card.read('book'), keptBook);
+  assert.deepEqual(card.read('album'), keptAlbum);
+  assert.equal(card.stored.get(PHOTO_KEY), keptDisk, 'the saved album is rolled back as well');
+  assert.equal(card.read("photoCount('XJ')"), 1);
+  assert.match(card.read('keepsakeNote'), /nothing was changed/);
+});
+
+test('a phone that cannot save at all still hands over a backup, and admits a restore did not happen', () => {
+  const source = boot({ search: '?who=XJ' });
+  source.run('toggle(4)');
+  const file = JSON.stringify(source.read("backupOf('XJ')"));
+
+  const page = equip(boot({ search: '?who=XJ', storageDenied: true, confirmResult: true }));
+  page.click({ action: 'summary' });
+  page.click({ action: 'backup' });
+  const anchor = page.created.at(-1);
+  assert.equal(anchor.tag, 'a');
+  assert.match(anchor.download, /^night-safari-bingo-XJ-/);
+  assert.match(page.read('keepsakeNote'), /Backed up XJ’s card and 0 photos/);
+
+  const before = page.read('book');
+  assert.equal(page.run(`takeBackup(${JSON.stringify(file)})`), false);
+  assert.deepEqual(page.read('book'), before, 'nothing half-written when nothing can be written');
+  assert.match(page.read('keepsakeNote'), /won’t save right now, so nothing was changed/);
+});
+
+test('the photos-only-live-here truth is told plainly, once per screen', () => {
+  const page = boot({ search: '?who=XJ' });
+  assert.match(page.app.innerHTML, /No photos yet/);
+  page.run(`setPhoto('XJ', 0, ${JSON.stringify(jpeg(24))}); render()`);
+  assert.match(page.app.innerHTML, /kept on this phone only\. Worth saving at the end of the night/);
+  assert.equal((page.app.innerHTML.match(/Worth saving at the end of the night/g) || []).length, 1, 'said once');
+  assert.match(page.app.innerHTML, /clearing this browser takes them with it/, 'the field guide is honest too');
+
+  const blocked = boot({ search: '?who=XJ', storageDenied: true });
+  assert.match(blocked.app.innerHTML, /This browser can’t save right now/);
+  assert.match(blocked.app.innerHTML, /photos won’t be kept/);
+  assert.equal(blocked.app.innerHTML.includes('Worth saving at the end of the night'), false,
+    'one warning per screen, not two');
+  blocked.click({ action: 'summary' });
+  assert.match(blocked.app.innerHTML, /isn’t keeping anything tonight/);
+  assert.equal((blocked.app.innerHTML.match(/isn’t keeping anything tonight/g) || []).length, 1);
+
+  // Calm, not shouty.
+  for (const shouty of ['WARNING', 'Warning', '⚠', 'lost forever', 'Danger', '!!']) {
+    assert.equal(page.app.innerHTML.includes(shouty), false, shouty);
+    assert.equal(blocked.app.innerHTML.includes(shouty), false, shouty);
+  }
+});
+
 /* ---------- plumbing ---------- */
 
 test('missing images are removed once to reveal a fallback, without a retry loop', () => {
@@ -683,5 +1216,25 @@ test('all bingo image references exist and have valid WebP dimensions', () => {
     assert.equal(width / height, name === 'scene_intro' ? 4 / 3 : 1);
     assert.ok(source.includes(`img/${name === 'scene_intro' ? 'scene_intro' : '${cell.art}'}.webp`) ||
       source.includes(`${name}.webp`), `${name} is referenced`);
+  }
+});
+
+test('player labels follow config.js when the page provides PEOPLE', () => {
+  const page = boot({ people: { players: ['Onion', 'Carrot'] } });
+  assert.deepEqual(page.read('NAMES'), ['Onion', 'Carrot'],
+    'NAMES should come from PEOPLE.players when config.js is loaded');
+});
+
+test('player labels fall back to the literal pair without config.js', () => {
+  const page = boot();
+  assert.deepEqual(page.read('NAMES'), ['XJ', 'YA'],
+    'NAMES should fall back when PEOPLE is absent');
+});
+
+test('a malformed PEOPLE is ignored rather than breaking the board', () => {
+  for (const bad of [{}, { players: [] }, { players: ['Solo'] }, { players: 'XJ,YA' }]) {
+    const page = boot({ people: bad });
+    assert.deepEqual(page.read('NAMES'), ['XJ', 'YA'],
+      `NAMES should fall back for ${JSON.stringify(bad)}`);
   }
 });
