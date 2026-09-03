@@ -546,7 +546,7 @@ app.addEventListener('click', event => {
   else if (button.dataset.cell !== undefined) toggle(Number(button.dataset.cell));
   else if (button.dataset.photo !== undefined) pickPhoto(Number(button.dataset.photo));
   else if (button.dataset.viewPhoto !== undefined) openPhoto(Number(button.dataset.viewPhoto));
-  else if (ACTIONS[button.dataset.action]) ACTIONS[button.dataset.action]();
+  else if (Object.prototype.hasOwnProperty.call(ACTIONS, button.dataset.action)) ACTIONS[button.dataset.action]();
 });
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && lightbox !== null) closePhoto();
