@@ -3,3 +3,14 @@ ref/
 .DS_Store
 Thumbs.db
 .orig_img/
+
+# temporary browser test harnesses
+.sky.html
+.diag*.html
+.tap.html
+.egg.html
+.cmp.html
+.dex*.html
+.frame.html
+_dex*.html
+_tmp*.html
