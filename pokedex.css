@@ -117,6 +117,42 @@
 }
 
 /* ---------- preferences ---------- */
+/* Bonus cards keep their lilac double border before and after discovery. */
+.dex-section-title,.dex-bonus-section h2,.dex-afterword h2{font-family:'Fredoka','Nunito',sans-serif;font-size:23px;color:#f4ecff;margin:14px 0}
+.dex-afterword{margin-top:28px;padding-top:14px;text-align:center}
+.dex-last-card{grid-template-columns:minmax(0,1fr);max-width:190px;margin:0 auto}
+.dex-bonus-section{margin-top:28px;padding-top:20px;border-top:2px dashed #b9a2df}
+.dex-bonus-section>p{font-size:14px;line-height:1.6;color:#eee5fc;margin:0 0 18px}
+.pokedex-page .is-bonus{border:6px double #8b70ad;background:#f7f0ff}
+.is-bonus .dex-no{background:#e4d4f4;color:#342c4a}
+.dex-bonus-badge{display:inline-block;color:#51365f;background:#eadbf8;border:1px solid #aa8bc4;
+  border-radius:99px;padding:3px 8px;font-size:10px;font-weight:900;letter-spacing:.02em}
+.dex-file .dex-bonus-badge{margin-top:8px;font-size:12px}
+.dex-quest{--acc:#dfcdf1}
+.dex-quest .idname{font-size:clamp(24px,7vw,34px);line-height:1.15}
+.pokedex-page .is-bonus .dex-shadowpic{background:#eee5f8;border-color:#89719d}
+.dex-portrait-shadow{display:block;width:100%;height:100%;object-fit:contain;mix-blend-mode:multiply}
+.dex-portrait-shadow[hidden],.dex-shadow-missing[hidden]{display:none}
+.dex-shadow-missing{font-size:12px;color:#51365f}
+.dex-card.is-bonus .dex-status{color:#604874}
+.dex-outline{margin:16px 0;text-align:left;color:var(--ink-soft);font-size:13px;line-height:1.55}
+.dex-outline summary{cursor:pointer;padding:10px 0;min-height:44px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+.dex-outline p{margin:0 0 10px}
+.dex-guess{display:grid;gap:10px;text-align:left;margin-top:16px}
+.dex-guess label{font-weight:900;color:var(--ink)}
+.dex-guess p{margin:0;font-size:13px;line-height:1.5;color:var(--ink-soft)}
+.dex-guess input{box-sizing:border-box;width:100%;min-width:0;min-height:48px;padding:11px 12px;
+  border:2px solid #89719d;border-radius:12px;background:#fff;color:#342c4a;color-scheme:light;font:inherit;font-size:16px}
+.dex-guess input:focus-visible,.dex-outline summary:focus-visible{outline:3px solid #80609c;outline-offset:3px}
+.dex-guess .btn{width:100%}
+.dex-guess .dex-guess-message{min-height:40px}
+.dex-clue{text-align:left;padding:10px 12px;background:#e9def3;border-radius:10px;font-size:13px;line-height:1.6;color:#493453}
+.dex-clue b{display:block}
+.dex-clue-button{margin:8px 0;background:#f6eeff}
+.dex-clue-button:disabled{cursor:default;box-shadow:none;color:#655471}
+.is-bonus .dex-bigpic{overflow:hidden}
+.dex-topbar{flex-wrap:wrap}
+
 @media (prefers-reduced-motion:reduce){
   .pokedex-page *,.pokedex-page *::before,.pokedex-page *::after{
     animation:none!important;transition:none!important;scroll-behavior:auto!important}
@@ -154,11 +190,7 @@
 .dex-card.is-shadow .dex-name{font-size:17px;letter-spacing:.14em;color:#7a70a0}
 .dex-card.is-shadow .dex-status{margin-top:auto;color:#8b82ab}
 
-/* The portrait, flattened to a shape. brightness(0) keeps the alpha,
-   so what is left is an outline and nothing else. */
-.dex-shade{display:block;width:100%;height:100%;filter:brightness(0) opacity(.55)}
-.dex-shade svg,.dex-shade img{display:block;width:100%;height:100%}
-.dex-shade .dex-qmark{font-size:38px}
+/* Dedicated raster silhouettes preserve the finished portrait's pose. */
 .dex-bigpic.dex-shadowpic{background:linear-gradient(165deg,#e7e1f6,#cec5e7)}
 
 /* ---------- a shadow's file ---------- */

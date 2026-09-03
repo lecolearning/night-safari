@@ -30,6 +30,12 @@ p{line-height:1.55;margin:0 0 12px}
 .small{font-size:13px}
 .center{text-align:center}
 .hidden{display:none!important}
+.safari-nav{position:sticky;top:8px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 22px;padding:5px;background:var(--paper);color:var(--ink);border:var(--border);border-radius:18px;box-shadow:3px 4px 0 rgba(0,0,0,.3)}
+.safari-nav a,.safari-nav>span{display:flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.3;font-weight:800;text-align:center;color:var(--ink)}
+.safari-nav a{text-decoration:none;background:var(--mint)}
+.safari-nav a:hover{background:var(--gold)}
+.safari-nav a:focus-visible{outline:3px solid #6850b5;outline-offset:2px}
+.portrait-fallback{display:grid;place-items:center;font-size:64px;background:#fff;filter:none}
 
 /* ---------- sky ---------- */
 .sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}

@@ -1,5 +1,5 @@
 /* ============================================================
-   Night Safari field guide — a small collectible set of seven.
+   Night Safari field guide — seven quiz friends and three trail bonuses.
    Loads after art.js and animals.js. Renders the grid and the
    detail card into #dex-view and keeps the animal id in the URL
    hash, so #otter can be linked and Back behaves itself.
@@ -14,8 +14,11 @@
   if (!view) return;
 
   /* ---------- the set, in card order ---------- */
-  const ORDER = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong'].filter((k) => A[k]);
-  Object.keys(A).forEach((k) => { if (ORDER.indexOf(k) < 0) ORDER.push(k); });
+  const CORE_ORDER = (window.QUIZ_ANIMAL_KEYS || ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong']).filter((k) => A[k]);
+  const BONUS_ORDER = ['tapir', 'flyingsquirrel', 'flyingfox'].filter((k) => A[k]);
+  const ORDER = [...CORE_ORDER, ...BONUS_ORDER];
+  const isBonus = (k) => BONUS_ORDER.includes(k);
+  const quests = window.BONUS_QUESTS;
   const N = ORDER.length;
 
   if (!N) {
@@ -27,6 +30,7 @@
   const SHORT = {
     otter: 'Otter', dhole: 'Dhole', loris: 'Slow Loris', pangolin: 'Pangolin',
     fishingcat: 'Fishing Cat', tiger: 'Tiger', binturong: 'Binturong',
+    tapir: 'Tapir', flyingsquirrel: 'Flying Squirrel', flyingfox: 'Flying Fox',
   };
   /* Names follow config.js, so the aliases stay on when NAMES_ON is false. */
   const PEOPLE = window.PEOPLE || {};
@@ -39,7 +43,7 @@
   let HER_KEY = null;
   try {
     const saved = localStorage.getItem('ns_result');
-    if (saved && Object.prototype.hasOwnProperty.call(A, saved)) HER_KEY = saved;
+    if (CORE_ORDER.includes(saved)) HER_KEY = saved;
   } catch (e) { /* private mode. No badge, no drama. */ }
 
   /* ---------- who has actually been met ----------
@@ -56,7 +60,7 @@
       const arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return [];
       // Known ids only, once each. Anything else is somebody else's typing.
-      return arr.filter((k, i) => typeof k === 'string' && ORDER.indexOf(k) >= 0 && arr.indexOf(k) === i);
+      return arr.filter((k, i) => typeof k === 'string' && CORE_ORDER.indexOf(k) >= 0 && arr.indexOf(k) === i);
     } catch (e) { return []; }
   }
   const SEEN = readSeen();
@@ -65,7 +69,15 @@
   }
 
   const isAuto = (k) => k === HIS_KEY || k === HER_KEY;   // these two need no button
-  const isMet = (k) => isAuto(k) || SEEN.indexOf(k) >= 0;
+  const BONUS_KEY = 'ns_dex_bonus_v1';
+  let bonusSaved = true;
+  let earned = [];
+  try {
+    const saved = JSON.parse(localStorage.getItem(BONUS_KEY) || '[]');
+    if (Array.isArray(saved)) earned = [...new Set(saved.filter(k => BONUS_ORDER.includes(k)))];
+  } catch (_) { /* A corrupt value or private browser starts with three fresh games. */ }
+  const games = {};
+  const isMet = (k) => isBonus(k) ? earned.includes(k) : isAuto(k) || SEEN.indexOf(k) >= 0;
   const metCount = () => ORDER.filter(isMet).length;
 
   /* ---------- text helpers ---------- */
@@ -80,7 +92,7 @@
   const short = (k) => SHORT[k] || (A[k] && A[k].name) || k;
   const lower = (k) => short(k).toLowerCase();
   const pad = (n) => String(n).padStart(3, '0');
-  const num = (k) => pad(ORDER.indexOf(k) + 1);
+  const num = (k) => pad(idx(k));
   const pic = (k) => (window.ART && window.ART.portrait
     ? window.ART.portrait(k)
     : '<img class="art portrait-img" src="img/' + esc(k) + '.webp" alt="">');
@@ -88,17 +100,18 @@
 
   /* The card number is the only id we put in the markup. img/otter.webp would
      hand the whole surprise over to anyone who opened the inspector. */
-  const idx = (k) => ORDER.indexOf(k) + 1;
-  const byIdx = (s) => ORDER[(parseInt(s, 10) || 0) - 1] || '';
+  // Keep original card numbers and the sealed No. 008 stable; bonuses are 009–011.
+  const idx = (k) => CORE_ORDER.includes(k) ? CORE_ORDER.indexOf(k) + 1 :
+    BONUS_ORDER.includes(k) ? BONUS_ORDER.indexOf(k) + 9 : 0;
+  const byIdx = (s) => ORDER.find(k => idx(k) === Number(s)) || '';
 
-  /* A silhouette: the drawn portrait, flattened to a shape. The inline drawing
-     carries no name anywhere in it, which the webp filename cannot promise. */
+  /* Every shadow matches its finished raster portrait, not the older SVG art.
+     Number-only filenames keep names out of the locked card's rendered markup. */
   function shade(k) {
-    const art = window.ART;
-    const inner = (art && art.svgPortrait && art.BODY && art.BODY[k])
-      ? art.svgPortrait(k)
-      : '<span class="dex-qmark">?</span>';
-    return '<span class="dex-shade" aria-hidden="true">' + inner + '</span>';
+    return '<img class="dex-portrait-shadow" src="img/shadow-' + num(k) + '.webp"'
+      + ' width="720" height="720" alt="Mystery animal silhouette, card ' + num(k) + '"'
+      + ' onerror="this.hidden=true;this.nextElementSibling.hidden=false">'
+      + '<span class="dex-shadow-missing" hidden>Our shadow is hiding too. Try reloading in a little while.</span>';
   }
 
   /* ============================================================
@@ -112,7 +125,10 @@
     pangolin: 'Two small snuffles. Pangolins are famously almost silent, so this is generous.',
     fishingcat: 'A chirrup, then a low rumble of approval.',
     tiger: 'A long low roar, more felt than heard.',
-    binturong: 'A popcorn-scented chuckle.',
+    binturong: 'A soft, sleepy chuckle. Still faintly popcorn-scented.',
+    tapir: 'A tiny whistle from someone in no particular hurry.',
+    flyingsquirrel: 'A quick little chirrup, then off to the next tree.',
+    flyingfox: 'Two soft chatters. Supper has been located.',
   };
 
   let audio = null;            // AudioContext, made on the first tap
@@ -228,14 +244,31 @@
       rumble(c, bus, 0.02, { f0: 46, f1: 38, dur: 1.2, gain: 0.28 });
     },
     binturong: (c, bus) => {
-      for (let i = 0; i < 4; i++) {
-        rumble(c, bus, i * 0.135, { f0: 158 - i * 9, f1: 120 - i * 8, dur: 0.11, gain: 0.26, saw: true, cut: 340 });
-      }
-      chirp(c, bus, 0.56, { type: 'sine', f0: 300, f1: 220, dur: 0.18, gain: 0.1 });
+      // Rounded little "hoo" notes instead of short sawtooth bursts, which
+      // made the chuckle sound like a buzzing speaker. A little breath keeps
+      // it warm; each note eases in and fades out before the next one starts.
+      [0, 0.25, 0.52].forEach((at, i) => {
+        chirp(c, bus, at, { type: 'sine', f0: 330 - i * 30, f1: 220 - i * 15,
+          dur: 0.2 + i * 0.03, gain: 0.13 - i * 0.02, soft: true });
+        puff(c, bus, at + 0.01, { f: 700 - i * 60, q: 0.7, dur: 0.16 + i * 0.02, gain: 0.025 });
+      });
+    },
+    tapir: (c, bus) => {
+      chirp(c, bus, 0, { f0: 640, f1: 880, dur: 0.3, gain: 0.12, soft: true });
+      chirp(c, bus, 0.4, { f0: 820, f1: 620, dur: 0.22, gain: 0.09, soft: true });
+    },
+    flyingsquirrel: (c, bus) => {
+      [0, 0.17, 0.37].forEach((at, i) => chirp(c, bus, at,
+        { f0: 920 + i * 70, f1: 1250 - i * 40, dur: 0.12, gain: 0.09, soft: true }));
+    },
+    flyingfox: (c, bus) => {
+      [0, 0.28].forEach((at, i) => chirp(c, bus, at,
+        { f0: 570 - i * 50, f1: 340, dur: 0.2, gain: 0.1, soft: true }));
     },
   };
 
   function playCry(key, btn) {
+    if (!ORDER.includes(key) || !isMet(key)) return;
     const c = ctx();
     if (!c || !CRIES[key]) {
       say('This browser would rather stay quiet. The animals understand.');
@@ -270,6 +303,7 @@
      ============================================================ */
   function badgesHTML(k) {
     const out = [];
+    if (isBonus(k)) return '<span class="dex-bonus-badge">✨ Trail bonus</span>';
     if (k === HIS_KEY) out.push('<span class="dex-badge ya">' + esc(HIM) + '<span class="sr-only">, this one is ' + esc(HIM) + '’s</span></span>');
     if (k === HER_KEY) out.push('<span class="dex-badge xj">' + esc(HER) + '<span class="sr-only">, this one is ' + esc(HER) + '’s</span></span>');
     return out.length ? '<span class="dex-badges">' + out.join('') + '</span>' : '';
@@ -282,23 +316,24 @@
   }
 
   function gridHTML() {
-    const cards = ORDER.map((k) => {
+    const cardHTML = (k) => {
       const an = A[k];
       const n = num(k);
       // Not met: a number, a shadow and nothing else. No name, no species,
       // no colour, no call button — the call alone would give it away.
       if (!isMet(k)) {
         return '<li class="dex-cell">'
-          + '<button type="button" class="dex-card is-shadow" data-idx="' + idx(k) + '"'
-          + ' aria-label="Card number ' + n + '. Not met yet. Open it for a hint.">'
+          + '<button type="button" class="dex-card is-shadow' + (isBonus(k) ? ' is-bonus' : '') + '" data-idx="' + idx(k) + '"'
+          + ' aria-label="Card number ' + n + (isBonus(k) ? '. Trail bonus. Guess the silhouette to reveal it.' : '. Not met yet. Open it for a hint.') + '">'
+          + (isBonus(k) ? badgesHTML(k) : '')
           + '<span class="dex-no">No. ' + n + '</span>'
           + '<span class="dex-pic dex-shadowpic">' + shade(k) + '</span>'
           + '<span class="dex-name" aria-hidden="true">???</span>'
-          + '<span class="dex-status">Not met yet</span>'
+          + '<span class="dex-status">' + (isBonus(k) ? 'Guess to discover' : 'Not met yet') + '</span>'
           + '</button></li>';
       }
       return '<li class="dex-cell">'
-        + '<button type="button" class="dex-card is-met" data-idx="' + idx(k) + '"'
+        + '<button type="button" class="dex-card is-met' + (isBonus(k) ? ' is-bonus' : '') + '" data-idx="' + idx(k) + '"'
         + ' style="--acc:' + colour(an.color) + '"'
         + ' aria-label="Card number ' + n + ', ' + esc(an.name) + badgeWords(k) + '. Open its file.">'
         + badgesHTML(k)
@@ -306,12 +341,12 @@
         + '<span class="dex-pic">' + pic(k) + '</span>'
         + '<span class="dex-name">' + esc(short(k)) + '</span>'
         + '<span class="dex-species">' + esc(an.name) + '</span>'
-        + '<span class="dex-status">Met ✓</span>'
+        + '<span class="dex-status">' + (isBonus(k) ? 'Bonus earned ✓' : 'Met ✓') + '</span>'
         + '</button>'
         + '<button type="button" class="dex-sound" data-cry="' + esc(k) + '" aria-label="Hear the ' + esc(lower(k)) + '">'
         + '<span aria-hidden="true">♪</span></button>'
         + '</li>';
-    }).join('');
+    };
 
     // No. 008 is the Case 002 tie-in: a slot that never fills in.
     const locked = '<li class="dex-cell">'
@@ -325,10 +360,18 @@
       + '</button></li>';
 
     return '<div class="screen">'
-      + '<ul class="dex-grid">' + cards + locked + '</ul>'
-      + '<p class="dex-note">Seven cards, seven real residents. A shadow fills itself in the moment you meet the animal, '
+      + '<h2 class="dex-section-title">The quiz cast</h2>'
+      + '<ul class="dex-grid">' + CORE_ORDER.map(cardHTML).join('') + '</ul>'
+      + '<p class="dex-note">Seven quiz friends, seven real residents. A shadow fills itself in the moment you meet the animal, '
       + 'and every fact that turns up on it is true, including the popcorn. The little ♪ plays a met animal’s call. '
-      + 'No. 008 is not a mistake.</p>'
+      + 'Each shadow matches its portrait.</p>'
+      + '<section class="dex-bonus-section" aria-labelledby="bonus-title"><h2 id="bonus-title">Three little detours</h2>'
+      + '<p>These lilac-bordered friends are not quiz results. Who is hiding in each shadow? Guess their names to collect their cards.</p>'
+      + '<ul class="dex-grid">' + BONUS_ORDER.map(cardHTML).join('') + '</ul>'
+      + '<p class="dex-note">Clues if you need them. As many guesses as you like. A bonus is a little discovery, not a claim that you spotted the animal.</p></section>'
+      + '<section class="dex-afterword" aria-labelledby="afterword-title"><h2 id="afterword-title">For another night</h2>'
+      + '<ul class="dex-grid dex-last-card">' + locked + '</ul>'
+      + '<p class="dex-note">No. 008 is not a mistake. Some introductions can wait.</p></section>'
       + '<div class="stack" style="margin-top:16px">'
       + '<a class="btn mint" href="bingo.html">Open the bingo card</a>'
       + '<a class="btn paper" href="index.html">Back to the story</a>'
@@ -363,8 +406,68 @@
   ];
   const hint = (k) => HINTS[(idx(k) - 1) % HINTS.length];
 
+  function questHTML(k) {
+    const game = games[k] || (games[k] = quests.create(k));
+    return '<article class="idcard dex-file dex-quest is-bonus">'
+      + '<div class="idhead"><div class="dex-hno">No. ' + num(k) + '</div>'
+      + '<h2 class="idname" id="dex-title" tabindex="-1">Who’s that animal?</h2>'
+      + badgesHTML(k) + '<p class="dex-tagline">A little shadow. A new friend.</p></div>'
+      + '<div class="idbody"><div class="dex-bigpic dex-shadowpic">' + shade(k) + '</div>'
+      + '<details class="dex-outline"><summary>Describe the shadow</summary><p>' + esc(quests.outline(k)) + '</p></details>'
+      + '<form class="dex-guess" data-bonus-guess><label for="bonus-answer">Your guess</label>'
+      + '<p id="guess-help">Common names count. No timer, no lost guesses.</p>'
+      + '<input id="bonus-answer" name="answer" type="text" maxlength="80" autocomplete="off"'
+      + ' spellcheck="false" aria-describedby="guess-help guess-message" value="' + esc(game.answer) + '">'
+      + '<button class="btn mint" type="submit">Is it you?</button>'
+      + '<p id="guess-message" class="dex-guess-message">' + esc(game.message) + '</p></form>'
+      + '<div id="bonus-clues">' + cluesHTML(game) + '</div>'
+      + '<button class="dex-mini dex-clue-button" type="button" data-bonus-hint'
+      + (game.hints === 3 ? ' disabled' : '') + '>' + clueLabel(game) + '</button>'
+      + '<p class="dex-locknote">Guess together if you like. Your discovery is saved on this device.</p>'
+      + '</div></article>';
+  }
+  const clueLabel = game => game.hints === 3 ? 'All three clues are here' :
+    (game.hints ? 'One more little clue' : 'A little clue, please');
+  const cluesHTML = game => quests.clues(game).map((clue, i) =>
+    '<p class="dex-clue"><b>Clue ' + (i + 1) + '</b> ' + esc(clue) + '</p>').join('');
+
+  function submitGuess(form) {
+    if (!isBonus(shown) || isMet(shown)) return;
+    const game = games[shown];
+    const input = form.querySelector('[name="answer"]');
+    if (!game || !input) return;
+    if (!quests.guess(game, input.value)) {
+      const message = document.getElementById('guess-message');
+      if (message) message.textContent = game.message;
+      say(game.message);
+      input.focus({ preventScroll: true });
+      return;
+    }
+    earned.push(shown);
+    try { localStorage.setItem(BONUS_KEY, JSON.stringify(earned)); bonusSaved = true; }
+    catch (_) { bonusSaved = false; }
+    justMet = shown;
+    history.replaceState(null, '', '#' + token(shown));
+    render({ force: true, quiet: true, keepPosition: true });
+    paintProgress();
+    say('You found me! ' + A[shown].name + ' joined your collection.'
+      + (bonusSaved ? '' : ' Your browser could not save it; keep this tab open for this visit.'));
+  }
+
+  function showClue(button) {
+    if (!isBonus(shown) || isMet(shown)) return;
+    const game = games[shown];
+    if (!quests.hint(game)) return;
+    const clues = document.getElementById('bonus-clues');
+    if (clues) clues.innerHTML = cluesHTML(game);
+    button.textContent = clueLabel(game);
+    button.disabled = game.hints === 3;
+    say('Clue ' + game.hints + '. ' + quests.clues(game).at(-1));
+  }
+
   // A card still in shadow: the number, the shape, a nudge, and one button.
   function shadowHTML(k) {
+    if (isBonus(k)) return questHTML(k);
     const n = num(k);
     return '<article class="idcard dex-file dex-shadowfile">'
       + '<div class="idhead">'
@@ -379,7 +482,7 @@
       + '<div class="idblock"><b>A gentle nudge</b>' + esc(hint(k)) + '</div>'
       + '<button type="button" class="btn mint dex-unlock" data-unlock="' + idx(k) + '">I saw this one!</button>'
       + '<p class="dex-locknote">Press it at the park and the card is yours for keeps. Press it on the sofa and you are only fibbing to a website.</p>'
-      + '<div class="idfoot">Card ' + n + ' of ' + pad(N) + ' · not met yet</div>'
+      + '<div class="idfoot">No. ' + n + ' · quiz cast · not met yet</div>'
       + '</div></article>';
   }
 
@@ -388,7 +491,7 @@
     const prev = ORDER[(i - 1 + N) % N];
     const next = ORDER[(i + 1) % N];
     // A neighbour still in shadow keeps its name to itself, out loud too.
-    const label = (t) => (isMet(t) ? esc(A[t].name) : 'number ' + num(t) + ', not met yet');
+    const label = (t) => (isMet(t) ? esc(A[t].name) : 'number ' + num(t) + (isBonus(t) ? ', trail bonus to discover' : ', not met yet'));
     const face = (t) => (isMet(t) ? esc(short(t)) : '???');
     return '<nav class="dex-nav" aria-label="Move through the set">'
       + '<button type="button" class="dex-navbtn" data-jump="' + idx(prev) + '" aria-label="Previous card: ' + label(prev) + '">'
@@ -401,19 +504,19 @@
   function detailHTML(k) {
     return '<div class="screen">'
       + '<div class="dex-topbar">'
-      + '<button type="button" class="dex-mini" data-back>← All seven</button>'
-      + '<span class="dex-of">Card ' + num(k) + ' of ' + pad(N) + '</span>'
+      + '<button type="button" class="dex-mini" data-back>← All cards</button>'
+      + '<span class="dex-of">No. ' + num(k) + ' · ' + (isBonus(k) ? 'Trail bonus' : 'Quiz cast') + '</span>'
       + '</div>'
       + (isMet(k) ? fileHTML(k) : shadowHTML(k))
       + navHTML(k)
-      + '<button type="button" class="btn paper" style="margin-top:12px" data-back>Back to all seven</button>'
+      + '<button type="button" class="btn paper" style="margin-top:12px" data-back>Back to all cards</button>'
       + '<p class="dex-hint">Left and right arrows flick through the set. Escape comes back here.</p>'
       + '</div>';
   }
 
   function fileHTML(k) {
     const an = A[k];
-    return '<article class="idcard dex-file" style="--acc:' + colour(an.color) + '">'
+    return '<article class="idcard dex-file' + (isBonus(k) ? ' is-bonus' : '') + '" style="--acc:' + colour(an.color) + '">'
       + '<div class="idhead">'
       + '<div class="dex-hno">No. ' + num(k) + '</div>'
       + '<h2 class="idname" id="dex-title" tabindex="-1">' + esc(an.name) + '</h2>'
@@ -426,7 +529,8 @@
       + '<span aria-hidden="true">♪</span> Hear the ' + esc(lower(k)) + '</button>'
       + '<p class="dex-crynote">' + esc(CRY_NOTE[k] || '') + ' Synthesised on the spot by a browser that has never met one.</p>'
 
-      + '<div class="idblock"><b>One true thing</b>' + esc(an.fact) + '</div>'
+      + '<div class="idblock"><b>One true thing</b>' + esc(an.fact)
+      + (an.source && an.source.startsWith('https://www.mandai.com/') ? '<a class="dex-fact-source" href="' + esc(an.source) + '" target="_blank" rel="noopener noreferrer">Animal facts: Mandai ↗</a>' : '') + '</div>'
       + '<div class="idblock"><b>Where to find it on Saturday</b>' + esc(an.findme) + '</div>'
       + '<div class="idblock"><b>Strengths</b>' + listHTML(an.strengths) + '</div>'
       + '<div class="idblock"><b>Weakness</b>' + listHTML(an.weakness) + '</div>'
@@ -434,9 +538,10 @@
       + '<div class="idblock"><b>Alignment</b>' + escBr(an.alignment)
       + '<b style="margin-top:10px">Hidden talent</b>' + esc(an.talent) + '</div>'
       + '<div class="idblock"><b>Peer reviews</b>' + peersHTML(an.peers) + '</div>'
-      + '<div class="idfoot">Card ' + num(k) + ' of ' + pad(N) + ' · met ✓</div>'
+      + '<div class="idfoot">No. ' + num(k) + ' · ' + (isBonus(k) ? 'trail bonus earned ✓' : 'met ✓') + '</div>'
+      + (isBonus(k) ? '<p class="dex-locknote">' + (bonusSaved ? 'Your bonus is saved on this device. Spotting the real animal is a separate little joy.' : 'This browser could not save your bonus. Keep this tab open to keep it for this visit.') + '</p>' : '')
       // Only for the ones unlocked by hand. The other two were never a claim.
-      + (isAuto(k) ? ''
+      + (isAuto(k) || isBonus(k) ? ''
         : '<p class="dex-undo"><button type="button" class="dex-undolink" data-relock="' + idx(k)
           + '">I was wrong, put this one back</button></p>')
       + '</div></article>';
@@ -444,7 +549,6 @@
 
   function progressHTML() {
     const n = metCount();
-    const left = N - n;
     // An unmet pip keeps even its colour to itself.
     const pips = ORDER.map((k) => (isMet(k)
       ? '<i class="met" style="--acc:' + colour(A[k].color) + '"></i>'
@@ -460,16 +564,10 @@
     } else {
       who = her + ' is the ' + esc(lower(HER_KEY)) + ' and ' + him + ' is the ' + his + '. ';
     }
-    let line;
-    if (!left) {
-      line = '<b>All ' + N + '</b> met. The whole set, in one evening. '
-        + (HER_KEY ? who : her + '’s badge is still waiting on the quiz, but the cards are all yours. ')
-        + 'Nothing left to find, which is the only sad thing about it.';
-    } else {
-      line = '<b>' + n + ' of ' + N + '</b> met so far. ' + who
-        + (left === 1 ? 'One shadow to go. ' : left + ' still in shadow. ')
-        + 'Spot one tonight, open its card and press <b>I saw this one</b> — it fills itself in on the spot.';
-    }
+    const originals = CORE_ORDER.filter(isMet).length;
+    const bonuses = BONUS_ORDER.filter(isMet).length;
+    const line = '<b>' + n + ' of ' + N + '</b> cards collected. ' + originals + ' quiz friends · ' + bonuses + ' trail bonuses. '
+      + who + (n === N ? 'The whole collection. A lovely little record of your curiosity.' : 'Meet the quiz cast at the park; play the lilac bonus cards whenever you like.');
     return '<span class="dex-pips" aria-hidden="true">' + pips + '</span><p>' + line + '</p>';
   }
   function paintProgress() { if (progressBox) progressBox.innerHTML = progressHTML(); }
@@ -478,7 +576,7 @@
   let justMet = null;          // the card to sparkle on the next paint
 
   function unlock(k) {
-    if (!k || isMet(k)) return;
+    if (!CORE_ORDER.includes(k) || isMet(k)) return;
     SEEN.push(k);
     saveSeen();
     justMet = k;
@@ -490,6 +588,7 @@
   }
 
   function relock(k) {
+    if (!CORE_ORDER.includes(k)) return;
     const i = SEEN.indexOf(k);
     if (i < 0) return;                    // the automatic two are not up for debate
     SEEN.splice(i, 1);
@@ -541,11 +640,11 @@
       if (!first) {
         const title = document.getElementById('dex-title');
         if (title) title.focus({ preventScroll: true });
-        window.scrollTo(0, 0);
+        if (!(opt && opt.keepPosition)) window.scrollTo(0, 0);
         if (!quiet) {
           say(isMet(id)
-            ? A[id].name + ', card ' + num(id) + ' of ' + pad(N) + '.'
-            : 'Card ' + num(id) + ' of ' + pad(N) + '. Not met yet.');
+            ? A[id].name + ', card ' + num(id) + '.'
+            : 'Card ' + num(id) + (isBonus(id) ? '. Guess the silhouette to discover it.' : '. Not met yet.'));
         }
       }
     } else {
@@ -554,7 +653,7 @@
       if (!first) {
         const card = view.querySelector('.dex-card[data-idx="' + idx(last) + '"]');
         if (card) card.focus({ preventScroll: true });
-        if (!quiet) say('Back to all seven cards.');
+        if (!quiet) say('Back to the animal collection.');
       }
     }
   }
@@ -602,6 +701,8 @@
   }
 
   view.addEventListener('click', (e) => {
+    const clue = e.target.closest('[data-bonus-hint]');
+    if (clue) { showClue(clue); return; }
     const cry = e.target.closest('[data-cry]');
     if (cry) { playCry(cry.getAttribute('data-cry'), cry); return; }
     const met = e.target.closest('[data-unlock]');
@@ -617,8 +718,16 @@
     if (e.target.closest('[data-back]')) toGrid();
   });
 
+  view.addEventListener('submit', (e) => {
+    const form = e.target.closest('[data-bonus-guess]');
+    if (!form) return;
+    e.preventDefault();
+    submitGuess(form);
+  });
+
   document.addEventListener('keydown', (e) => {
     if (!shown) return;                                   // the grid needs no shortcuts
+    if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if (e.key === 'Escape') { e.preventDefault(); toGrid(); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }

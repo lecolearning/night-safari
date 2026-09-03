@@ -272,7 +272,7 @@ function result() {
     <div class="stack" style="margin-top:22px">
       <button class="btn coral" onclick="share()">${PEOPLE.sendResults}</button>
       <button class="btn mint" onclick="location.href='bingo.html'">Open the Night Safari bingo card</button>
-      <button class="btn lilac" onclick="location.href='pokedex.html'">Meet all seven animals</button>
+      <button class="btn lilac" onclick="location.href='pokedex.html'">Open the animal field guide</button>
       <button class="btn paper" onclick="location.href='plan.html'">Before you go: the practical bits</button>
       <button class="btn paper" onclick="location.reload()">Play again (animals are known to change their minds)</button>
     </div>
@@ -334,6 +334,6 @@ async function share() {
 
 // dev shortcuts: ?step=N jumps into the story, ?result=otter shows a result card
 const _q = new URLSearchParams(location.search);
-if (_q.get('result') && ANIMALS[_q.get('result')]) { scores[_q.get('result')] = 9; picks.food = STORY[8].choices[0][1]; picks.route = STORY[9].choices[1][1]; picks.spice = STORY[10].choices[1][1]; result(); }
+if (QUIZ_ANIMAL_KEYS.includes(_q.get('result'))) { scores[_q.get('result')] = 9; picks.food = STORY[8].choices[0][1]; picks.route = STORY[9].choices[1][1]; picks.spice = STORY[10].choices[1][1]; result(); }
 else if (_q.get('step')) { step = +_q.get('step'); ask(); }
 else intro();

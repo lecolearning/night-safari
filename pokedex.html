@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070b1f">
-<meta name="description" content="A little field guide to the seven Night Safari animals, one collectible card each.">
-<title>Meet the Seven · Night Safari</title>
+<meta name="description" content="Seven quiz friends and three playful trail bonuses. Collect ten Night Safari animal cards, one little discovery at a time.">
+<title>Animal Field Guide · Night Safari</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦦</text></svg>">
 <link rel="stylesheet" href="style.css">
@@ -13,11 +13,14 @@
 </head>
 <body class="pokedex-page">
 <main class="wrap">
+  <nav class="safari-nav" aria-label="Bingo and animal field guide">
+    <a href="bingo.html">← 🐾 Back to bingo</a><span aria-current="page">📖 Field guide</span>
+  </nav>
 
   <header class="dex-head">
     <span class="tag mint">Field guide</span>
-    <h1 class="pixel">The nocturnal seven</h1>
-    <p class="dex-lede">Seven residents of Saturday night, one card each. The ones we have met open right up. The rest are shadows until we spot them.</p>
+    <h1 class="pixel">Our night-time neighbours</h1>
+    <p class="dex-lede">Seven quiz friends. Three little detours. Meet the original cast at the park, and guess the shadows to discover the lilac-bordered trail bonuses.</p>
   </header>
 
   <div id="dex-progress" class="dex-progress"></div>
@@ -26,12 +29,13 @@
   <p id="dex-live" class="sr-only" role="status" aria-live="polite"></p>
   <noscript><div class="card">This field guide needs JavaScript to deal out its cards. Switch it on, reload, and the animals will come back.</div></noscript>
 
-  <footer class="credit"><a href="index.html">← back to our little adventure</a> · <a href="plan.html">before you go</a></footer>
+  <footer class="credit"><a href="bingo.html">← back to bingo</a> · <a href="index.html">our little adventure</a> · <a href="plan.html">before you go</a></footer>
 </main>
 <script src="sky.js"></script>
 <script src="config.js"></script>
 <script src="art.js"></script>
 <script src="animals.js"></script>
+<script src="bonus-quests.js"></script>
 <script src="pokedex.js"></script>
 <script>
 if ('serviceWorker' in navigator) {

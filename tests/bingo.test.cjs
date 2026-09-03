@@ -86,6 +86,18 @@ function boot({ search = '', stored = new Map(), storageDenied = false, fullKeys
     listeners, docListeners, click, stored };
 }
 
+test('existing bonus-animal squares gain their portraits without reshuffling or losing marks', () => {
+  const app = boot();
+  const saved = fullCard();
+  const labels = ['A Malayan tapir, two-tone', 'A flying squirrel, gliding', 'A fruit bat, wings folded'];
+  labels.forEach((label, i) => { saved.cells[i] = { icon: '🐾', label, kind: 'wildlife' }; });
+  const repaired = app.read('validCard(' + JSON.stringify(saved) + ', "Ace")');
+  assert.deepEqual(repaired.cells.slice(0, 3).map(cell => cell.art), ['tapir', 'flyingsquirrel', 'flyingfox']);
+  assert.deepEqual(repaired.on, saved.on);
+  assert.deepEqual(repaired.celebrated, saved.celebrated);
+  assert.deepEqual(repaired.cells.slice(0, 3).map(cell => cell.label), labels);
+});
+
 function fullCard(who = 'Ace') {
   return { who, cells: Array.from({ length: CELLS }, (_, i) => ({ icon: '🐾', label: `Moment ${i}`, kind: 'together' })),
     on: Array.from({ length: CELLS }, (_, i) => i < 4 || i === FREE), celebrated: [0] };

@@ -165,7 +165,7 @@ window.toast = function (msg) {
       if (caught === 1 && window.toast) window.toast('Caught one. ✨');
       else if (caught === 3 && window.toast) window.toast('Three. Keep going.');
       else if (caught === 7) {
-        if (window.toast) window.toast('Seven caught. One for each animal. Letting them go. 🔎');
+        if (window.toast) window.toast('Seven caught. One for each quiz friend. Letting them go. 🔎');
         sendFliesHome();
         caught = 0;
       }

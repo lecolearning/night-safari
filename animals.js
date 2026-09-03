@@ -2,6 +2,9 @@
    Top-level const in a classic script is visible to later scripts;
    window.ANIMALS is set as well so anything can reach it safely. */
 
+// Bonus cards are field-guide discoveries, never personality-quiz outcomes.
+const QUIZ_ANIMAL_KEYS = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong'];
+
 // Each animal mirrors the Veggie ID card: strengths, weakness, quotes, alignment, hidden talent, peer reviews.
 const ANIMALS = {
   otter: {
@@ -95,6 +98,48 @@ const ANIMALS = {
     findme: 'Pangolin Trail',
     compat: [96, 'You smell of hot popcorn and I know exactly where the good supper is. Between us that is a complete evening.'],
   },
+  tapir: {
+    name: 'Malayan Tapir', color: '#b8beca', bonus: 'shadow',
+    tagline: 'Dressed formally. Absolutely no plans.',
+    strengths: ['Makes a quiet evening feel like the correct decision', 'Always leaves room on the picnic blanket', 'Excellent company for doing very little'],
+    weakness: ['Mistakes a comfortable pause for the end of the itinerary', 'Has never hurried towards anything that was not lunch'],
+    quotes: ['"We could just stay here a bit."', '"I brought leaves. Was this not a picnic?"'],
+    alignment: 'Lawful 30%, Neutral 65%, Chaotic 5%<br>Good 100%, Neutral 0%, Evil 0%',
+    talent: 'Makes slowing down feel like something you planned',
+    peers: [['Tapir saved me the shady spot. Did not make a big thing of it.', 'Pangolin'], ['I suggested five activities. Tapir suggested sitting down. Tapir won.', 'Otter']],
+    fact: 'That black-and-white coat helps break up its outline in the dark. A tapir’s flexible little snout can bring food to its mouth and even act as a snorkel.',
+    findme: 'Look out from the Safari Adventure Tram. Sightings are never guaranteed.',
+    source: 'https://www.mandai.com/en/night-safari/animals-and-zones/malayan-tapir.html',
+  },
+  flyingsquirrel: {
+    name: 'Spotted Giant Flying Squirrel', color: '#d9ac7e', bonus: 'shadow',
+    tagline: 'Said “follow me” before checking where.',
+    strengths: ['Finds the scenic route even between two trees', 'Makes an ordinary detour feel like an expedition', 'Brings enough enthusiasm for the quieter friend too'],
+    weakness: ['Calls every route a shortcut', 'Says “nearly there” from a different tree'],
+    quotes: ['"I have an idea." (already airborne)', '"Technically, we are still on the way."'],
+    alignment: 'Lawful 15%, Neutral 25%, Chaotic 60%<br>Good 100%, Neutral 0%, Evil 0%',
+    talent: 'Turns getting slightly sidetracked into the best part of the evening',
+    peers: [['We took a detour. It was a very good detour. I have no notes.', 'Dhole'], ['Offered me a shortcut. I offered to meet them on the ground.', 'Slow Loris']],
+    fact: 'It glides rather than flying like a bird. A skin membrane called the patagium stretches between its limbs to carry it from tree to tree.',
+    findme: 'Pangolin Trail. Look above you as well as ahead, and give it time.',
+    source: 'https://www.mandai.com/en/night-safari/animals-and-zones/pangolin-trail.1501917253627.html',
+  },
+  flyingfox: {
+    name: 'Malayan Flying Fox', color: '#b89bbd', bonus: 'shadow',
+    tagline: 'Looks mysterious. Is thinking about mangoes.',
+    strengths: ['Turns up for the late-night snack run', 'Can make a quiet corner feel cosy', 'Takes fruit selection extremely seriously'],
+    weakness: ['Looks dramatic while doing something completely ordinary', 'Has opinions about when a mango is ready'],
+    quotes: ['"It is not a cape. These are my arms."', '"I am listening. I am also thinking about fruit."'],
+    alignment: 'Lawful 35%, Neutral 50%, Chaotic 15%<br>Good 100%, Neutral 0%, Evil 0%',
+    talent: 'Makes bringing a snack look like a mysterious entrance',
+    peers: [['We had different ideas about supper. We both brought extra.', 'Fishing Cat'], ['Wore their wings like a blanket. I felt understood.', 'Binturong']],
+    fact: 'A fruit bat, not a fox. Its keen sight and sense of smell help it find fruit and flowers at night, and it helps forests by spreading seeds and pollinating plants.',
+    findme: 'Flying Fox Walkthrough on the Leopard Trail. Watch quietly and let the bats pass.',
+    source: 'https://www.mandai.com/en/night-safari/animals-and-zones/malayan-flying-fox.html',
+  },
 };
 
-if (typeof window !== 'undefined') window.ANIMALS = ANIMALS;
+if (typeof window !== 'undefined') {
+  window.ANIMALS = ANIMALS;
+  window.QUIZ_ANIMAL_KEYS = QUIZ_ANIMAL_KEYS;
+}

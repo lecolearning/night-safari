@@ -27,7 +27,7 @@ const PHOTO_MAX_EDGE = 640;
 const PHOTO_QUALITY = 0.7;
 const PHOTO_MAX_CHARS = 700000;
 const PHOTO_PATTERN = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
-const ART_KEYS = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong'];
+const ART_KEYS = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong', 'tapir', 'flyingsquirrel', 'flyingfox'];
 const FREE_CELL = { icon: '💛', label: 'Here with you', kind: 'free' };
 
 // Night Safari residents and the small sensory things you actually look for in the dark.
@@ -43,12 +43,12 @@ const WILDLIFE = [
   ['🐈', 'A fishing cat, paws wet', 'fishingcat'],
   ['🍿', 'A binturong (like popcorn)', 'binturong'],
   ['🐕', 'A dhole, the whistling dog', 'dhole'],
-  ['🐖', 'A Malayan tapir, two-tone'],
+  ['🐖', 'A Malayan tapir, two-tone', 'tapir'],
   ['🐘', 'An Asian elephant, gentle'],
   ['🐺', 'A striped hyena, head down'],
-  ['🐿️', 'A flying squirrel, gliding'],
+  ['🐿️', 'A flying squirrel, gliding', 'flyingsquirrel'],
   ['🐆', 'A leopard cat, small spots'],
-  ['🦇', 'A fruit bat, wings folded'],
+  ['🦇', 'A fruit bat, wings folded', 'flyingfox'],
   ['🦏', 'A one-horned rhino, calm'],
   ['🦁', 'A lion with a proper mane'],
   ['😈', 'A Tasmanian devil, awake'],
@@ -138,7 +138,8 @@ function validCard(value, who) {
     if (!cell || typeof cell.icon !== 'string' || cell.icon.length > 16 ||
         typeof cell.label !== 'string' || !cell.label.trim() || cell.label.length > LABEL_MAX) return null;
     return { icon: cell.icon, label: cell.label,
-      art: ART_KEYS.includes(cell.art) ? cell.art : undefined,
+      art: ART_KEYS.includes(cell.art) ? cell.art :
+        WILDLIFE.find(item => item.label === cell.label && ['tapir', 'flyingsquirrel', 'flyingfox'].includes(item.art))?.art,
       kind: ['wildlife', 'together', 'free'].includes(cell.kind) ? cell.kind : 'together' };
   });
   if (cells.some(cell => !cell)) return null;

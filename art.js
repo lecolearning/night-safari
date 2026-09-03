@@ -157,7 +157,9 @@
     <linearGradient id="duskG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f7a8c4"/><stop offset=".45" stop-color="#ffd7a3"/><stop offset="1" stop-color="#8fd3ff"/></linearGradient>`;
   const G = (inner, sw = 4) => `<g filter="url(#wob)" stroke="${INK}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${inner}</g>`;
 
-  const portrait = (key) => `<svg viewBox="0 0 200 200" class="art" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>${FILTER}</defs>${G(BODY[key])}</svg>`;
+  const portrait = (key) => BODY[key]
+    ? `<svg viewBox="0 0 200 200" class="art" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>${FILTER}</defs>${G(BODY[key])}</svg>`
+    : `<span class="art portrait-fallback" aria-hidden="true">${({ tapir: '🐾', flyingsquirrel: '🐿️', flyingfox: '🦇' })[key] || '🐾'}</span>`;
 
   // place a character with its feet at (x,y), scaled by s
   const ch = (key, x, y, s = .6, flip = false) =>
@@ -243,7 +245,7 @@
     drum: scene(P.deep + P.stars(1) + P.trees('#0a1030') + P.ground('#173a3a', 215) + P.peekEyes + P.fireflies + P.moon(340, 50, 30)),
   };
 
-  // Portraits prefer a PNG in img/<key>.png (e.g. AI-generated or hand-drawn); falls back to the SVG if missing.
+  // Portraits prefer WebP; existing SVGs or a simple icon handle missing artwork without retries.
   const portraitImg = (key) => `<img class="art portrait-img" src="img/${key}.webp" alt="" onerror="this.outerHTML=ART.svgPortrait('${key}')">`;
   const sceneImg = (key) => `<img class="scene" src="img/scene_${key}.webp" alt="" onerror="this.outerHTML=ART.svgScene('${key}')">`;
   window.ART = { portrait: portraitImg, svgPortrait: portrait, scene: sceneImg, svgScene: (k) => SCENES[k] || '', BODY };
