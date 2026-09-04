@@ -37,7 +37,9 @@ function boot({ hash = '', stored = new Map(), storageDenied = false } = {}) {
       setItem(key, value) { if (storageDenied) throw Error('Denied'); stored.set(key, value); },
     },
   });
-  for (const file of ['animals.js', 'bonus-quests.js', 'keepsakes.js', 'pokedex.js']) vm.runInContext(read(file), context, { filename: file });
+  for (const file of ['animals.js', 'collection.js', 'animal-calls.js', 'bonus-quests.js', 'keepsakes.js', 'pokedex.js']) {
+    vm.runInContext(read(file), context, { filename: file });
+  }
   function click(attribute, value = '') {
     const button = { getAttribute: () => value, textContent: 'Save / share PNG', disabled: false, setAttribute() {}, removeAttribute() {} };
     handlers.click({ target: { closest: selector => selector === '[' + attribute + ']' ? button : null } });
@@ -307,4 +309,66 @@ test('save feedback handles download, sharing, cancellation and failure gently',
     const messages = { downloaded: /download has started/, shared: /share sheet/, cancelled: /No rush/, error: /View full size/ };
     assert.match(app.elements['keepsake-status'].textContent, messages[outcome]);
   }
+});
+
+/* ---------- sightings that came from the bingo card ---------- */
+
+test('a quiz friend ticked on the bingo card is simply met here', () => {
+  const app = boot({ stored: new Map([['ns_dex_met', '["otter","tiger"]']]) });
+  assert.match(app.elements['dex-progress'].innerHTML, /3 of 13/);   // plus the fishing cat, always his
+  assert.match(app.view.innerHTML, /img\/otter\.webp/);
+  assert.match(app.elements['dex-progress'].innerHTML, /ticking a wildlife square on the bingo card counts/);
+});
+
+test('a bonus spotted at the park is stamped, but only once it has been earned', () => {
+  const shadowed = boot({ stored: new Map([['ns_dex_wild_v1', '["tapir"]']]) });
+  assert.equal((shadowed.view.innerHTML.match(/is-shadow is-bonus/g) || []).length, 6,
+    'a real sighting cannot open a card that is won by guessing');
+  assert.equal(shadowed.view.innerHTML.includes('img/tapir.webp'), false);
+
+  const earned = boot({ stored: new Map([[BONUS_KEY, '["tapir","owl"]'], ['ns_dex_wild_v1', '["tapir"]']]) });
+  assert.match(earned.view.innerHTML, /Earned · spotted ✓/);
+  assert.equal((earned.view.innerHTML.match(/Bonus earned ✓/g) || []).length, 1, 'the owl was only named');
+  earned.navigate('#tapir');
+  assert.match(earned.view.innerHTML, /Spotted for real ✓/);
+  assert.match(earned.view.innerHTML, /trail bonus earned ✓ · spotted/);
+  earned.navigate('#owl');
+  assert.equal(earned.view.innerHTML.includes('Spotted for real'), false, 'a named shadow makes no such claim');
+});
+
+test('a scribbled or unreadable sightings list costs nothing', () => {
+  for (const raw of ['{broken', 'null', '42', '{"tapir":true}', '["otter","nobody"]']) {
+    const app = boot({ stored: new Map([[BONUS_KEY, '["tapir"]'], ['ns_dex_wild_v1', raw]]) });
+    assert.equal(app.view.innerHTML.includes('Earned · spotted'), false, raw);
+    assert.match(app.view.innerHTML, /Bonus earned ✓/, raw);
+  }
+  assert.doesNotThrow(() => boot({ storageDenied: true }));
+});
+
+test('a sighting made in another tab survives an unlock on this one', () => {
+  const stored = new Map([['ns_dex_met', '["tiger"]']]);
+  const app = boot({ stored });
+  // The bingo card, open elsewhere on the same phone, meets somebody while this page sits idle.
+  stored.set('ns_dex_met', '["tiger","otter"]');
+  app.click('data-unlock', '2');                     // and then this page meets the dhole
+  assert.deepEqual(JSON.parse(stored.get('ns_dex_met')).sort(), ['dhole', 'otter', 'tiger']);
+
+  // Putting one back still removes only that one.
+  app.click('data-relock', '2');
+  assert.deepEqual(JSON.parse(stored.get('ns_dex_met')).sort(), ['otter', 'tiger']);
+});
+
+test('the listening game is a quiet door, and only once there is something behind it', () => {
+  // Two met is the starting point, so there is nothing to guess between yet.
+  const early = boot({ stored: new Map([['ns_result', 'otter']]) });
+  assert.equal(early.view.innerHTML.includes('calls.html'), false, 'no locked door, so no door');
+  assert.match(early.view.innerHTML, /href="bingo\.html"/, 'the bingo card is always offered');
+
+  const ready = boot({ stored: new Map([['ns_dex_met', '["otter","dhole","loris"]']]) });
+  assert.match(ready.view.innerHTML, /href="calls\.html"/);
+  assert.match(ready.view.innerHTML, /Who’s that call\?/);
+
+  // Bonus cards count towards it too, since their calls play the same way.
+  const bonuses = boot({ stored: new Map([[BONUS_KEY, '["tapir","owl","porcupine"]']]) });
+  assert.match(bonuses.view.innerHTML, /href="calls\.html"/);
 });

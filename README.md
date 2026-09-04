@@ -15,9 +15,12 @@ Static site. No build step, no dependencies. Live at
 | `bingo.html` + `bingo.js` | The bingo card for the walk. Each phone keeps its own card in localStorage. |
 | `sunday.html` + `sunday.js` | Case 002, to send the morning after. Reads the bingo photos off the phone and shows them back as evidence. |
 | `pokedex.html` + `pokedex.js` + `pokedex.css` | Seven quiz friends, six silhouette-guess bonus cards, synthesised calls, and a sealed No. 008. |
+| `calls.html` + `calls.js` + `calls.css` | "Who's that call?" — an optional listening game. Entirely a side road; see below. |
 | `bonus-quests.js` | Forgiving name matching and optional clues for the six bonus shadows. |
+| `animal-calls.js` | The synthesised calls, shared by the field guide and the calls game. No audio files. |
+| `collection.js` | The one reader for who this phone has met, so no two pages can disagree. |
 | `config.js` | Who the site is for. `NAMES_ON` switches real names on or off site-wide. This is the only file that holds them. |
-| `animals.js` | Thirteen animals; `QUIZ_ANIMAL_KEYS` keeps the story's original seven outcomes. |
+| `animals.js` | Thirteen animals; `QUIZ_ANIMAL_KEYS` keeps the story's original seven outcomes, `ANIMAL_SHORT` the short names. |
 | `art.js` + `img/` | WebP characters, matching raster silhouettes and scenes. Original portraits have SVG fallbacks; bonus portraits have simple icon fallbacks. |
 | `sky.js` | Stars, moon, fireflies, treeline. |
 | `sw.js` + `manifest.webmanifest` | Offline support and add-to-home-screen. |
@@ -34,6 +37,58 @@ Source PNGs live in `.orig_img/`, which is not committed. To regenerate the WebP
 files after adding art, resize scenes to 1100px wide and portraits to 720px square,
 then save as WebP at quality 88 to 90. Prompts for generating more art are in
 `PROMPTS.md`.
+
+## One shared night
+
+Both phones deal their cards from the date rather than from chance, so the two cards
+hold **the same fifteen squares in a different order**. That makes it a race instead of
+two solitaires, and it needs no server, no signal and no pairing. The night rolls over
+at 4am, so a card started at 23:50 and one started at 00:10 still match. A card carried
+over from an earlier night keeps that night's fifteen, and the board says so.
+
+Cards still do not sync: marks, photos and progress stay on the phone that made them.
+
+## The night, in order
+
+Every tick records the time it happened, so the end-of-night summary is a timeline
+rather than a list, with a line saying how long the evening ran. The keepsake sheet
+prints each photo's time under its label. Cards saved before this existed still open;
+their squares simply sort to the bottom with no time to show.
+
+## Taking a square off again
+
+Marking is one tap. Unmarking wants two: the first tap on a marked square only asks,
+showing "tap again" on the square and a line above the grid, and the second one does it.
+A pocket or a dark path finds squares all by itself, and an accidental untick would take
+the moment *and* the time it happened.
+
+The question puts itself down after six seconds, and any other tap — another square, the
+📷, a player switch, Escape — answers it "no". The free square is never markable either way.
+
+## Bingo and the field guide
+
+Ticking a wildlife square is a sighting, so `bingo.js` writes it straight into the
+field guide on the same phone:
+
+- one of the **seven quiz friends** is simply met, and its card opens (`ns_dex_met`);
+- one of the **six bonuses** only gets a "spotted for real" stamp (`ns_dex_wild_v1`),
+  because those cards are earned by naming a silhouette, not by standing in front of one.
+
+Adding only, never removing: unticking a square leaves the field guide alone, and a
+mistap is undone on the card itself, where "I was wrong, put this one back" already
+lives. `collection.js` is the single reader for all of this, so the field guide and
+the calls game can never disagree about who may be named out loud.
+
+## Who's that call? (optional)
+
+`calls.html` plays one synthesised call and offers four names. No timer, no penalty,
+no leaderboard, and nothing is saved — a reload starts a fresh round.
+
+It is deliberately a side road. Nothing depends on it, nothing links to it from the
+bingo card, and it is not in the top navigation. The only way in is a single button at
+the bottom of the field guide, which appears **only once four animals have been met**,
+plus a footer link. It names only animals this phone has already met: a call from a
+card still in shadow would give the silhouette away.
 
 ## Field guide bonuses
 
@@ -86,6 +141,8 @@ access control; the public image files are not encrypted.
 - `index.html?result=otter` shows a result card. Valid: `otter`, `dhole`, `loris`,
   `pangolin`, `fishingcat`, `tiger`, `binturong`.
 - `bingo.html?who=Onion` skips the player picker. Use whatever labels `config.js` is set to.
+- The bingo deal is seeded by the date, so a card made on the same day is always the
+  same fifteen squares. To see a different set, change the system date.
 
 ## The bingo password
 

@@ -155,6 +155,9 @@
 .dex-portrait-shadow[hidden],.dex-shadow-missing[hidden]{display:none}
 .dex-shadow-missing{font-size:12px;color:#51365f}
 .dex-card.is-bonus .dex-status{color:#604874}
+/* A bonus that was also spotted in the park wears a warmer stamp than one only named. */
+.dex-file .dex-spotted{border-color:#2f7a58;background:#e7f7ee}
+.dex-file .dex-spotted b{color:#22624a}
 .dex-outline{margin:16px 0;text-align:left;color:var(--ink-soft);font-size:13px;line-height:1.55}
 .dex-outline summary{cursor:pointer;padding:10px 0;min-height:44px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
 .dex-outline p{margin:0 0 10px}

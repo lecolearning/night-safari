@@ -7,9 +7,9 @@ const vm = require('node:vm');
 // Exercise the actual audio recipes without playing sound or requiring a browser.
 // These checks validate scheduling and the intended softer envelope, not fidelity
 // to a real animal recording (the site deliberately uses cartoon impressions).
-const source = fs.readFileSync(path.join(__dirname, '..', 'pokedex.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '..', 'animal-calls.js'), 'utf8');
 const start = source.indexOf('  function noiseBuffer(c)');
-const end = source.indexOf('  function playCry(key, btn)');
+const end = source.indexOf('  /* ---------- the little public door ---------- */');
 assert.ok(start >= 0 && end > start, 'audio recipes must be present');
 const cries = vm.runInNewContext(source.slice(start, end) + '\nCRIES;');
 

@@ -12,6 +12,7 @@ const MOMENTS = CELLS - 1;               // fifteen to fill; the middle is alrea
 const WILDLIFE_PER_CARD = 10;
 const TOGETHER_PER_CARD = MOMENTS - WILDLIFE_PER_CARD;
 const LABEL_MAX = 32;                    // keeps every label on a narrow phone without ugly breaks
+const UNMARK_WINDOW = 6000;              // how long a square keeps asking before it lets it go
 const KEY = 'ns_bingo_v3';
 const OLD_KEYS = ['ns_bingo_v2', 'ns_bingo_v1']; // 5×5 saves; left untouched, never read into a 4×4 board
 const GATE_KEY = 'ns_bingo_unlocked';   // the card is sent ahead of the night, so it waits for a word
@@ -112,24 +113,57 @@ let storageOK = true;
 let view = 'board';        // 'board' | 'summary'
 let lightbox = null;       // index of the photo shown large
 let notice = null;         // one gentle, temporary message
+let armed = null;          // a marked square waiting to be sure it should come off
+let armSeq = 0;            // so a stale timer never disarms a newer question
 let keepsakeNote = null;   // how saving the photos went, on the end screen only
 let working = false;       // a keepsake is being drawn; one at a time is plenty
 
-function shuffle(items) {
+function shuffle(items, random = Math.random) {
   const result = items.slice();
   for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
 }
-function newCard(who) {
-  const cells = shuffle([
-    ...shuffle(WILDLIFE).slice(0, WILDLIFE_PER_CARD),
-    ...shuffle(TOGETHER).slice(0, TOGETHER_PER_CARD),
-  ]);
+
+/* ---------- one shared night ---------- */
+// Two phones, two cards, and nothing in common between them. So the fifteen squares
+// are drawn from the date rather than from chance: both cards hold the same set, and
+// "you got that one too!" is true. Anything before 4am belongs to the evening that
+// just was, so a card started at 23:50 and one at 00:10 are still the same night.
+const NIGHT_ROLLOVER_HOUR = 4;
+function nightOf(when) {
+  const date = new Date(Number(when));
+  if (!Number.isFinite(date.getTime())) return 0;
+  if (date.getHours() < NIGHT_ROLLOVER_HOUR) date.setDate(date.getDate() - 1);
+  return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
+// mulberry32: small, and identical on both phones for the same seed.
+function seeded(seed) {
+  let t = (Number(seed) >>> 0) + 0x9e3779b9;
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let x = Math.imul(t ^ (t >>> 15), 1 | t);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function newCard(who, when = Date.now()) {
+  const night = nightOf(when);
+  const pick = seeded(night);
+  // Which fifteen: the night decides, the same way on both phones.
+  const chosen = [
+    ...shuffle(WILDLIFE, pick).slice(0, WILDLIFE_PER_CARD),
+    ...shuffle(TOGETHER, pick).slice(0, TOGETHER_PER_CARD),
+  ];
+  // Where they land: ordinary chance, so the two boards never look alike.
+  const cells = shuffle(chosen);
   cells.splice(FREE_INDEX, 0, { ...FREE_CELL });
-  return { who, cells, on: cells.map((_, i) => i === FREE_INDEX), celebrated: [], started: Date.now() };
+  const at = cells.map(() => null);
+  at[FREE_INDEX] = when;                 // turning up together is the first thing that happened
+  return { who, night, cells, on: cells.map((_, i) => i === FREE_INDEX), at, celebrated: [], started: when };
 }
 
 function validCard(value, who) {
@@ -151,7 +185,16 @@ function validCard(value, who) {
     Number.isInteger(i) && i >= 0 && i < LINES.length))] : [];
   // The night this card began, so a keepsake can be dated. An older save simply starts from today.
   const started = Number.isFinite(value.started) && value.started > 0 ? Math.floor(value.started) : Date.now();
-  return { who, cells, on, celebrated, started };
+  const night = Number.isFinite(value.night) && value.night > 0 ? Math.floor(value.night) : nightOf(started);
+  // Times arrived after the first cards did, so a save without them still opens.
+  // Those squares simply keep their place on the board instead of on the clock.
+  const stamps = Array.isArray(value.at) ? value.at : [];
+  const at = cells.map((_, i) => {
+    const when = stamps[i];
+    return on[i] && Number.isFinite(when) && when > 0 ? Math.floor(when) : null;
+  });
+  if (!at[FREE_INDEX]) at[FREE_INDEX] = started;
+  return { who, night, cells, on, at, celebrated, started };
 }
 function readJSON(key) {
   let raw;
@@ -169,6 +212,49 @@ function loadBook() {
     if (NAMES.includes(saved.active) && result.cards[saved.active]) result.active = saved.active;
   }
   return result;
+}
+
+/* ---------- the field guide, on the same phone ---------- */
+// Ticking a wildlife square is a sighting, and the field guide has a card for that
+// animal sitting in shadow. So tell it. Adding only, never removing: a mistap is
+// undone on the card itself, which is where the explanation lives anyway. The seven
+// quiz friends unlock outright; the six bonuses are earned by naming a silhouette,
+// so a real sighting only stamps a card the guessing already opened.
+const DEX_MET_KEY = 'ns_dex_met';
+const DEX_WILD_KEY = 'ns_dex_wild_v1';
+const DEX_CORE = ['otter', 'dhole', 'loris', 'pangolin', 'fishingcat', 'tiger', 'binturong'];
+const DEX_BONUS = ART_KEYS.filter(key => !DEX_CORE.includes(key));
+// Short names, only for the one-line notice. The field guide uses the same ones.
+const DEX_NAMES = {
+  otter: 'Otter', dhole: 'Dhole', loris: 'Slow Loris', pangolin: 'Pangolin',
+  fishingcat: 'Fishing Cat', tiger: 'Tiger', binturong: 'Binturong',
+  tapir: 'Tapir', flyingsquirrel: 'Flying Squirrel', flyingfox: 'Flying Fox',
+  owl: 'Fish-owl', porcupine: 'Porcupine', elephant: 'Elephant',
+};
+function readDex(key, allowed) {
+  let raw;
+  try { raw = localStorage.getItem(key); } catch (_) { return null; }
+  let value;
+  try { value = JSON.parse(raw || '[]'); } catch (_) { return []; }
+  return Array.isArray(value) ? value.filter((k, i) => allowed.includes(k) && value.indexOf(k) === i) : [];
+}
+// Returns what changed, so the board can mention it once and then leave it alone.
+function noteSighting(art) {
+  const core = DEX_CORE.includes(art);
+  const allowed = core ? DEX_CORE : DEX_BONUS;
+  if (!allowed.includes(art)) return null;
+  const kept = readDex(core ? DEX_MET_KEY : DEX_WILD_KEY, allowed);
+  if (!kept || kept.includes(art)) return null;        // no storage, or already known
+  kept.push(art);
+  try { localStorage.setItem(core ? DEX_MET_KEY : DEX_WILD_KEY, JSON.stringify(kept)); }
+  catch (_) { return null; }
+  return core ? 'met' : 'wild';
+}
+function sightingWords(art, how) {
+  const name = DEX_NAMES[art] || 'That one';
+  return how === 'met'
+    ? `New in your field guide: ${name}.`
+    : `${name} spotted for real. Your field guide has the stamp.`;
 }
 
 /* ---------- the little album ---------- */
@@ -268,7 +354,9 @@ const SHEET_WIDTH = 1080;                // kind to a phone screen and still dec
 const SHEET_MARGIN = 48;
 const SHEET_GUTTER = 28;
 const SHEET_PAD = 12;                    // the white border around each little polaroid
-const SHEET_CAPTION = 46;                // room under each photo for its square’s label
+const SHEET_CAPTION = 66;                // room under each photo for its label and its time
+const SHEET_LABEL_BASE = 30;             // baselines, measured down from the bottom of the photo
+const SHEET_TIME_BASE = 54;
 const SHEET_CELL_MAX = 460;              // one lonely photo shouldn’t balloon to the full width
 const SHEET_HEAD = 196;                  // title and date
 const SHEET_FOOT = 116;                  // the warm line at the bottom
@@ -282,6 +370,7 @@ const SHEET_TITLE_FONT = '"Fredoka","Nunito","Segoe UI",sans-serif';
 const SHEET_BODY_FONT = '"Nunito","Segoe UI",sans-serif';
 
 function sheetLabelSize(cellWidth) { return cellWidth < 260 ? 16 : 19; }
+function sheetTimeSize(cellWidth) { return Math.max(13, sheetLabelSize(cellWidth) - 5); }
 function sheetLabelMax(cellWidth) {
   const inner = cellWidth - SHEET_PAD * 2 - 8;
   return Math.max(12, Math.min(34, Math.floor(inner / (sheetLabelSize(cellWidth) * 0.55))));
@@ -313,7 +402,8 @@ function sheetLayout(count) {
   }
   return { width: SHEET_WIDTH, height, cols, rows, gutter: SHEET_GUTTER,
     cell: { w: cellW, h: cellH }, photo: { w: photoW, h: photoW },
-    labelMax: sheetLabelMax(cellW), labelSize: sheetLabelSize(cellW), frames };
+    labelMax: sheetLabelMax(cellW), labelSize: sheetLabelSize(cellW),
+    timeSize: sheetTimeSize(cellW), frames };
 }
 // A long label is trimmed at a word where one is near enough, never mid-letter-soup.
 function clipLabel(text, max) {
@@ -338,6 +428,12 @@ function sheetDate(when) {
   if (!Number.isFinite(date.getTime())) return '';
   try { return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); }
   catch (_) { return date.toISOString().slice(0, 10); }
+}
+function clockTime(when) {
+  const date = new Date(Number(when));
+  if (!Number.isFinite(date.getTime())) return '';
+  try { return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
+  catch (_) { return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0'); }
 }
 function dayStamp(when) {
   const date = new Date(Number(when));
@@ -396,11 +492,18 @@ function drawSheet(ctx, layout, items, meta) {
           SHEET_PAD, SHEET_PAD, layout.photo.w, layout.photo.h);
       } catch (_) { /* one shy photo leaves an empty frame, never a broken sheet */ }
     }
+    const caption = SHEET_PAD * 2 + layout.photo.h;
     ctx.fillStyle = SHEET_INK;
     ctx.font = `700 ${layout.labelSize}px ${SHEET_BODY_FONT}`;
     ctx.textAlign = 'center';
-    ctx.fillText(clipLabel(item.label, layout.labelMax),
-      frame.w / 2, SHEET_PAD * 2 + layout.photo.h + Math.round(SHEET_CAPTION * 0.55));
+    ctx.fillText(clipLabel(item.label, layout.labelMax), frame.w / 2, caption + SHEET_LABEL_BASE);
+    // The time it happened, when the card was keeping times by then.
+    const when = clockTime(item.at);
+    if (when) {
+      ctx.font = `600 ${layout.timeSize}px ${SHEET_BODY_FONT}`;
+      ctx.fillStyle = SHEET_SOFT;
+      ctx.fillText(when, frame.w / 2, caption + SHEET_TIME_BASE);
+    }
     ctx.restore();
   });
 
@@ -439,7 +542,7 @@ function composeSheet(who) {
   const wanted = [];
   for (let i = 0; i < CELLS; i++) {
     const photo = photoOf(who, i);
-    if (photo) wanted.push({ index: i, label: card.cells[i].label, photo });
+    if (photo) wanted.push({ index: i, label: card.cells[i].label, at: card.at[i], photo });
   }
   if (!wanted.length) return Promise.resolve(null);
   return Promise.all(wanted.map(item => loadPhoto(item.photo))).then(images => {
@@ -531,7 +634,9 @@ function deliverImage(blob, filename, words) {
 
 /* ---------- a backup you can hold ---------- */
 const BACKUP_TAG = 'ns-bingo';
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
+// Version 1 files predate the clock. validCard fills the gaps, so they still restore.
+const BACKUP_READS = [1, 2];
 const BACKUP_TROUBLE = {
   unreadable: 'That file wouldn’t open, so nothing has changed.',
   shape: 'That isn’t one of our backup files, so nothing has changed.',
@@ -552,7 +657,8 @@ function backupOf(who) {
     savedAt: new Date().toISOString(),
     who,
     card: { who, cells: card.cells.map(cell => ({ ...cell })), on: card.on.slice(),
-      celebrated: card.celebrated.slice(), started: card.started },
+      at: card.at.slice(), celebrated: card.celebrated.slice(),
+      started: card.started, night: card.night },
     photos,
   };
 }
@@ -562,7 +668,7 @@ function validBackup(value) {
   const no = reason => ({ ok: false, reason, message: BACKUP_TROUBLE[reason] || BACKUP_TROUBLE.shape });
   if (!value || typeof value !== 'object' || Array.isArray(value) || value.app !== BACKUP_TAG) return no('shape');
   if (!Number.isInteger(value.version)) return no('shape');
-  if (value.version !== BACKUP_VERSION) return no('version');
+  if (!BACKUP_READS.includes(value.version)) return no('version');
   if (!NAMES.includes(value.who)) return no('player');
   const card = validCard(value.card, value.who);
   if (!card) return no('card');
@@ -695,6 +801,7 @@ function start(who, focus = false) {
   lightbox = null;
   notice = null;
   keepsakeNote = null;
+  disarm();
   save();
   render();
   if (focus) {
@@ -726,15 +833,17 @@ function cellHTML(cell, i, winCells) {
   const free = i === FREE_INDEX;
   const label = escapeHTML(cell.label);
   const position = `Row ${Math.floor(i / SIZE) + 1}, column ${i % SIZE + 1}`;
-  const classes = ['cell', state.on[i] && 'on', free && 'free', winCells.has(i) && 'win', photo && 'has-photo'];
+  const asking = armed === i;
+  const classes = ['cell', state.on[i] && 'on', free && 'free', winCells.has(i) && 'win',
+    photo && 'has-photo', asking && 'arming'];
   return `<div class="cell-wrap">
     <button type="button" class="${classes.filter(Boolean).join(' ')}"
       data-cell="${i}" data-kind="${cell.kind}" aria-pressed="${state.on[i]}" ${free ? 'aria-disabled="true"' : ''}
-      aria-label="${label}${free ? '. Free square, always marked' : ''}${photo ? '. Has a photo' : ''}. ${position}">
+      aria-label="${label}${free ? '. Free square, always marked' : ''}${photo ? '. Has a photo' : ''}${asking ? '. Marked. Activate again to unmark it' : ''}. ${position}">
       ${photo ? `<img class="cell-photo" src="${escapeHTML(photo)}" alt="" aria-hidden="true">` : ''}
       <span class="cell-check" aria-hidden="true">${state.on[i] ? '✓' : ''}</span>
       <span class="bingo-icon" aria-hidden="true"><span>${escapeHTML(cell.icon)}</span>${cell.art ? `<img src="img/${cell.art}.webp" alt="" width="40" height="40" loading="lazy" data-fallback>` : ''}</span>
-      <span class="cell-label">${label}</span>${free ? '<span class="cell-free-label" aria-hidden="true">FREE</span>' : ''}
+      <span class="cell-label">${label}</span>${free ? '<span class="cell-free-label" aria-hidden="true">FREE</span>' : ''}${asking ? '<span class="cell-undo-hint" aria-hidden="true">tap again</span>' : ''}
     </button>
     ${photo
       ? `<button type="button" class="cell-photo-btn has-photo" data-view-photo="${i}" aria-label="Open the photo for ${label}"><img src="${escapeHTML(photo)}" alt="" aria-hidden="true"></button>`
@@ -759,12 +868,35 @@ function lightboxHTML() {
   </div>`;
 }
 
+// The night in the order it actually happened. Squares from a card that predates the
+// clock, and photos on squares nobody ticked, keep their place on the board instead.
+function timeline(card, who) {
+  return card.cells.map((cell, i) => ({ cell, i, at: card.at[i], photo: Boolean(photoOf(who, i)) }))
+    .filter(row => (card.on[row.i] && row.i !== FREE_INDEX) || row.photo)
+    .sort((a, b) => (a.at && b.at ? a.at - b.at : a.at ? -1 : b.at ? 1 : a.i - b.i));
+}
+// The shape of the evening: card opened, last square ticked, and the gap between.
+function nightSpan(card, rows) {
+  const times = rows.map(row => row.at).filter(Boolean);
+  if (!times.length) return '';
+  const first = Math.min(card.started, ...times);
+  const minutes = Math.round((Math.max(...times) - first) / 60000);
+  if (minutes < 5) return '';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const spell = n => `${n} ${n === 1 ? 'minute' : 'minutes'}`;
+  const long = hours
+    ? `${hours} ${hours === 1 ? 'hour' : 'hours'}${rest ? ' and ' + spell(rest) : ''}`
+    : spell(minutes);
+  return `${clockTime(first)} to ${clockTime(Math.max(...times))} — ${long} of it.`;
+}
+
 function summaryHTML() {
   const { count, wins } = getProgress(state);
   const photos = photoCount(state.who);
   // Worth listing if it was ticked, or if it was worth a photo even without a tick.
-  const marked = state.cells.map((cell, i) => ({ cell, i }))
-    .filter(({ i }) => (state.on[i] && i !== FREE_INDEX) || photoOf(state.who, i));
+  const marked = timeline(state, state.who);
+  const span = nightSpan(state, marked);
   return `<div class="bingo-board">
     <header class="bingo-page-head"><span class="bingo-eyebrow">The end of the evening</span>
       <h1 id="bingo-heading" tabindex="-1">${state.who}’s little collection</h1>
@@ -777,8 +909,10 @@ function summaryHTML() {
         <div class="summary-figure"><strong>${wins.length}</strong><span>${wins.length === 1 ? 'line finished' : 'lines finished'}</span></div>
       </div>
       <p class="summary-warm">${warmLine(count, photos)}</p>
-      ${marked.length ? `<ul class="summary-list">${marked.map(({ cell, i }) =>
-        `<li><span aria-hidden="true">${escapeHTML(cell.icon)}</span>${escapeHTML(cell.label)}${photoOf(state.who, i) ? ' <span class="summary-photo-tag">with a photo</span>' : ''}</li>`).join('')}</ul>`
+      ${span ? `<p class="summary-span"><span aria-hidden="true">🕗</span> ${escapeHTML(span)}</p>` : ''}
+      ${marked.length ? `<ol class="summary-list summary-timeline">${marked.map(({ cell, i, at, photo }) =>
+        `<li>${at ? `<span class="summary-when">${escapeHTML(clockTime(at))}</span>`
+          : '<span class="summary-when summary-when-quiet" aria-hidden="true">·</span>'}<span aria-hidden="true">${escapeHTML(cell.icon)}</span><span class="summary-what">${escapeHTML(cell.label)}</span>${photo ? ' <span class="summary-photo-tag">with a photo</span>' : ''}</li>`).join('')}</ol>`
         : '<p class="summary-empty">Nothing marked yet — there is still a whole night in front of you.</p>'}
       <p class="summary-supper"><span aria-hidden="true">🍨</span> Favourite animal? Funniest moment? One tiny thing to remember?</p>
     </div>
@@ -813,6 +947,14 @@ function keepsakeHTML(photos) {
     </div>`;
 }
 
+// Both cards are dealt from the date, so tonight they hold the same fifteen squares.
+// A card carried over from an earlier night keeps that night's set, and says so.
+function sharedSetLine() {
+  return state.night === nightOf(Date.now())
+    ? `Both phones were dealt the same fifteen squares tonight, shuffled into a different order. Whoever ticks one first, ${NAMES.filter(who => who !== state.who)[0]} has it too.`
+    : 'This card was dealt on an earlier night, so it keeps that night’s fifteen squares. A fresh card would follow tonight’s.';
+}
+
 function boardHTML() {
   const { wins, remaining, count } = getProgress(state);
   const winCells = new Set(wins.flat());
@@ -830,8 +972,9 @@ function boardHTML() {
       <div class="bingo-card-top"><h2>${state.who}’s little collection</h2>
         <div class="bingo-players" role="group" aria-label="Switch player; both cards are kept">${NAMES.map(who =>
           `<button type="button" data-player="${who}" aria-pressed="${who === state.who}" aria-label="${who}’s card">${who}</button>`).join('')}</div></div>
-      <p id="bingo-help" class="bingo-instructions">Tap a square to mark it; tap again to undo. Four across, down or diagonally makes a bingo. The little 📷 on each square adds a photo.</p>
+      <p id="bingo-help" class="bingo-instructions">Tap a square to mark it. To take one off again, tap it twice — a stray tap in the dark costs nothing. Four across, down or diagonally makes a bingo. The little 📷 on each square adds a photo.</p>
       <div class="bingo-legend" aria-hidden="true"><span>🌿 Wildlife</span><span>💗 Us being us</span><span>💛 A free square</span></div>
+      <p class="bingo-shared-note">${sharedSetLine()}</p>
       ${notice ? `<p class="bingo-notice" role="status">${escapeHTML(notice)}</p>` : ''}
       <div class="grid" role="group" aria-label="${state.who}’s ${SIZE} by ${SIZE} bingo card" aria-describedby="bingo-help">${
         state.cells.map((cell, i) => cellHTML(cell, i, winCells)).join('')}</div>
@@ -846,6 +989,8 @@ function boardHTML() {
       <details class="bingo-details"><summary>A tiny field guide</summary>
         <p>Wildlife squares have a mint edge; our little moments have a pink one. The middle is already yours—you showed up together.</p>
         <p>Photos are shrunk and kept on this phone alone. Nothing is uploaded, and nothing is shared unless you show someone. That also means clearing this browser takes them with it, so the end screen has a button that saves them all as one picture.</p>
+        <p>Marking is one tap. Unmarking wants two, since a pocket or a dark path finds squares all by itself; the square says “tap again” while it is asking, and forgets the question after a few seconds.</p>
+        <p>Ticking a wildlife square also fills that animal in on the field guide, on this phone. Unticking leaves it there — if it was a mistap, the card itself has a button to put it back.</p>
         <p>Tick what happens naturally. A shy animal or an unfinished card doesn’t make the night any less lovely.</p>
         <p>Keep voices gentle, skip the flash, and follow the park’s signs. We’re guests in their home.</p>
       </details>
@@ -862,10 +1007,42 @@ function render() {
   if (view === 'board' && lightbox !== null) app.querySelector('.photo-close').focus({ preventScroll: true });
 }
 
+// Nothing is armed any more. Quiet on its own; the caller decides about repainting.
+function disarm() {
+  armed = null;
+  armSeq++;
+}
+
 function toggle(i) {
   if (!state || !Number.isInteger(i) || i < 0 || i >= CELLS || i === FREE_INDEX) return;
+  // Ticking is one tap, because that is the thing you came here to do. Unticking asks
+  // for a second one: a stray tap on a dark path should never quietly take a moment
+  // off the card, and the time it happened with it.
+  if (state.on[i] && armed !== i) {
+    armed = i;
+    const seq = ++armSeq;
+    notice = `${state.cells[i].label} is already marked. Tap it again to unmark it.`;
+    render();
+    const asking = app.querySelector(`[data-cell="${i}"]`);
+    if (asking) asking.focus({ preventScroll: true });
+    announce(notice);
+    // It gives up on its own, so a question left open does not wait all night.
+    setTimeout(() => {
+      if (armSeq !== seq || !state) return;
+      disarm();
+      notice = null;
+      if (view === 'board') render();
+    }, UNMARK_WINDOW);
+    return;
+  }
+  disarm();
   const wasFull = getProgress(state).count === MOMENTS;
   state.on[i] = !state.on[i];
+  state.at[i] = state.on[i] ? Date.now() : null;
+  // A wildlife square just ticked is a sighting, and the field guide wants to know.
+  const cell = state.cells[i];
+  const how = state.on[i] && cell.kind === 'wildlife' && cell.art ? noteSighting(cell.art) : null;
+  notice = how ? sightingWords(cell.art, how) + ' 📖' : null;
   const before = state.celebrated.length;
   LINES.forEach((line, k) => {
     if (line.every(j => state.on[j]) && !state.celebrated.includes(k)) state.celebrated.push(k);
@@ -877,7 +1054,7 @@ function toggle(i) {
   if (state.on[i]) button.classList.add('just-marked');
   const { count, wins } = getProgress(state);
   const newBingo = state.celebrated.length > before;
-  const said = `${state.cells[i].label} ${state.on[i] ? 'marked' : 'unmarked'}. ${count} of ${MOMENTS} moments. ${newBingo ? 'Bingo! A little victory for ' + state.who + '. ' : ''}${wins.length} completed ${wins.length === 1 ? 'line' : 'lines'}.`;
+  const said = `${state.cells[i].label} ${state.on[i] ? 'marked' : 'unmarked'}. ${count} of ${MOMENTS} moments. ${how ? sightingWords(cell.art, how) + ' ' : ''}${newBingo ? 'Bingo! A little victory for ' + state.who + '. ' : ''}${wins.length} completed ${wins.length === 1 ? 'line' : 'lines'}.`;
   announce(said);
   if (newBingo) celebrate();
   // A full card gently turns itself into the little end screen.
@@ -887,6 +1064,7 @@ function showSummary(lead = '') {
   if (!state) return;
   view = 'summary';
   lightbox = null;
+  disarm();
   render();
   app.querySelector('#bingo-heading').focus({ preventScroll: true });
   const { count } = getProgress(state);
@@ -897,11 +1075,12 @@ function showBoard() {
   if (!state) return;
   view = 'board';
   keepsakeNote = null;
+  disarm();
   render();
   app.querySelector('#bingo-heading').focus({ preventScroll: true });
 }
 function reset() {
-  if (!state || !confirm(`Start a fresh card for ${state.who}? This clears only ${state.who}’s squares and photos. The other player’s card stays safe.`)) return;
+  if (!state || !confirm(`Start a fresh card for ${state.who}? This clears only ${state.who}’s squares and photos, and deals tonight’s same fifteen squares in a new order. The other player’s card stays safe.`)) return;
   clearPhotos(state.who);
   book.cards[state.who] = newCard(state.who);
   start(state.who, true);
@@ -1105,6 +1284,13 @@ const ACTIONS = { reset, summary: showSummary, board: showBoard, 'close-photo': 
 app.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button || !app.contains(button)) return;
+  // One rule, so it is never a surprise: anything that is not the square itself
+  // puts the "tap again to unmark" question down, unanswered.
+  if (armed !== null && button.dataset.cell === undefined) {
+    disarm();
+    notice = null;
+    render();
+  }
   if (button.dataset.player) start(button.dataset.player, true);
   else if (button.dataset.cell !== undefined) toggle(Number(button.dataset.cell));
   else if (button.dataset.photo !== undefined) pickPhoto(Number(button.dataset.photo));
@@ -1112,7 +1298,14 @@ app.addEventListener('click', event => {
   else if (Object.prototype.hasOwnProperty.call(ACTIONS, button.dataset.action)) ACTIONS[button.dataset.action]();
 });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && lightbox !== null) closePhoto();
+  if (event.key !== 'Escape') return;
+  if (lightbox !== null) { closePhoto(); return; }
+  // Escape is the ordinary way to say "no, leave it": it answers the question too.
+  if (armed !== null) {
+    disarm();
+    notice = null;
+    render();
+  }
 });
 app.addEventListener('submit', event => {
   const form = event.target.closest('[data-gate]');

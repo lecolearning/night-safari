@@ -220,6 +220,14 @@ footer.credit a{color:var(--lilac)}
 .cell:active{transform:translate(1px,2px);box-shadow:0 0 0 rgba(0,0,0,.28)}
 .cell.on{background:var(--gold)}
 .cell.just-marked{animation:stamp .28s ease-out}
+/* A marked square that has been tapped once, asking whether we really meant it. */
+.cell.arming{outline:3px dashed #b8446b;outline-offset:-4px;animation:asking 1.1s ease-in-out infinite}
+/* Right of here is the 📷 button, so the hint keeps out of its way. */
+.cell-undo-hint{position:absolute;left:3px;right:34px;bottom:4px;z-index:3;text-align:center;
+  font-size:8.5px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:#8d2f4f}
+.cell.has-photo .cell-undo-hint{color:#ffe3ec;text-shadow:0 1px 4px rgba(0,0,0,.95)}
+@keyframes asking{0%,100%{outline-color:#b8446b}50%{outline-color:rgba(184,68,107,.35)}}
+@media (prefers-reduced-motion:reduce){.cell.arming{animation:none}}
 @keyframes stamp{50%{transform:scale(1.05) rotate(-2deg)}}
 .cell.free{background:var(--mint);border-bottom-color:#75bfa2;cursor:default}
 .cell.win{background:var(--coral)}
@@ -237,6 +245,7 @@ footer.credit a{color:var(--lilac)}
 .cell-photo-btn img{display:block;width:100%;height:100%;object-fit:cover}
 .cell-photo-btn.has-photo{background:var(--gold);border-color:var(--ink)}
 .cell-photo-btn:active{transform:translate(1px,1px);box-shadow:none}
+.bingo-shared-note{font-size:12px;font-weight:700;line-height:1.5;color:var(--ink-soft);margin:8px 0 0;text-align:center}
 .bingo-notice{font-size:13px;font-weight:800;line-height:1.5;color:var(--ink);background:var(--paper2);border:var(--border);border-radius:12px;padding:10px 12px;margin:10px 0 0}
 .bingo-album-note{font-size:12px;line-height:1.5;text-align:center;color:var(--ink-soft);margin:10px 0 0}
 
@@ -278,8 +287,13 @@ footer.credit a{color:var(--lilac)}
 .summary-figure strong{display:block;font-family:'Fredoka','Nunito',sans-serif;font-size:28px;line-height:1}
 .summary-figure span{display:block;font-size:11px;font-weight:700;line-height:1.35;color:var(--ink-soft);margin-top:5px}
 .summary-warm{font-size:15px;font-weight:800;line-height:1.5;margin:0 0 16px}
+.summary-span{font-size:12.5px;font-weight:800;line-height:1.5;color:var(--ink-soft);margin:0 0 12px}
 .summary-list{list-style:none;display:grid;gap:6px;margin:0 0 16px;padding:0;text-align:left}
 .summary-list li{display:flex;gap:8px;align-items:baseline;font-size:13px;font-weight:700;line-height:1.4;background:#fff;border:1.5px solid rgba(43,35,64,.25);border-radius:10px;padding:8px 10px}
+/* A fixed-width clock column, so the evening reads down the left-hand edge. */
+.summary-when{flex:0 0 auto;min-width:38px;font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:800;color:#6f6488}
+.summary-when-quiet{color:#b4acc4}
+.summary-what{flex:1 1 auto;min-width:0}
 .summary-photo-tag{font-size:11px;font-weight:800;color:#835039;white-space:nowrap}
 .summary-empty{font-size:13px;line-height:1.6;color:var(--ink-soft)}
 .summary-supper{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:0;padding-top:12px;border-top:1px dashed rgba(43,35,64,.3)}

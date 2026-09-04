@@ -172,7 +172,17 @@ const ANIMALS = {
   },
 };
 
+// Short names for the small spaces: card grids, four buttons in a row, a spoken
+// line. Kept beside the animals so the field guide and the calls game agree.
+const ANIMAL_SHORT = {
+  otter: 'Otter', dhole: 'Dhole', loris: 'Slow Loris', pangolin: 'Pangolin',
+  fishingcat: 'Fishing Cat', tiger: 'Tiger', binturong: 'Binturong',
+  tapir: 'Tapir', flyingsquirrel: 'Flying Squirrel', flyingfox: 'Flying Fox',
+  owl: 'Fish-owl', porcupine: 'Porcupine', elephant: 'Elephant',
+};
+
 if (typeof window !== 'undefined') {
   window.ANIMALS = ANIMALS;
   window.QUIZ_ANIMAL_KEYS = QUIZ_ANIMAL_KEYS;
+  window.ANIMAL_SHORT = ANIMAL_SHORT;
 }

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b1f">
+<meta name="description" content="A little listening game for the dark: your phone makes an animal call, you guess who.">
+<title>Who’s That Call?</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♪</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="calls.css">
+</head>
+<body class="calls-page">
+<main class="wrap">
+  <nav class="safari-nav" aria-label="Bingo, field guide and the calls game">
+    <a href="bingo.html">🐾 Bingo</a><a href="pokedex.html">📖 Field guide</a><span aria-current="page">♪ Calls</span>
+  </nav>
+  <div id="app"></div>
+  <div id="calls-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <noscript><div class="card">This little game needs JavaScript to make its noises. Please enable it, then reload the page.</div></noscript>
+  <footer class="credit"><a href="pokedex.html">animal field guide</a> · <a href="bingo.html">bingo card</a> · <a href="index.html">our little adventure</a></footer>
+</main>
+<script src="config.js"></script>
+<script src="sky.js"></script>
+<script src="art.js"></script>
+<script src="animals.js"></script>
+<script src="collection.js"></script>
+<script src="animal-calls.js"></script>
+<script src="calls.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>

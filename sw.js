@@ -2,7 +2,7 @@
    The park has patchy signal, so everything is cached on first visit and
    served from the cache afterwards. Bump VERSION to ship an update. */
 
-const VERSION = 'ns-v16';
+const VERSION = 'ns-v17';
 const CORE = 'core-' + VERSION;
 const RUNTIME = 'runtime-' + VERSION;
 
@@ -24,6 +24,11 @@ const CORE_ASSETS = [
   'bonus-quests.js',
   'keepsakes.js',
   'pokedex.css',
+  'calls.html',
+  'calls.js',
+  'calls.css',
+  'collection.js',
+  'animal-calls.js',
   'bingo.js',
   'sunday.js',
   'manifest.webmanifest',

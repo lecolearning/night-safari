@@ -342,8 +342,19 @@ test('mark and undo preserve focus, announce changes and keep the free square ma
   assert.equal(page.focused.at(-1).selector, '[data-cell="0"]');
   assert.equal(page.focused.at(-1).options.preventScroll, true);
   assert.match(page.announcement.textContent, /1 of 15 moments/);
+  // One tap on a marked square only asks; the mark, and its time, stay put.
+  page.click({ cell: '0' });
+  assert.equal(page.read('state.on[0]'), true, 'a single tap never takes a moment off');
+  assert.ok(page.read('book.cards.Ace.at[0]') > 0, 'and it keeps the time it happened');
+  assert.match(page.app.innerHTML, /class="[^"]*arming[^"]*"\s+data-cell="0"/);
+  assert.match(page.app.innerHTML, /tap again/);
+  assert.match(page.app.innerHTML, /aria-label="[^"]*Activate again to unmark it/);
+  assert.match(page.announcement.textContent, /is already marked. Tap it again to unmark it./);
+  assert.equal(page.focused.at(-1).selector, '[data-cell="0"]');
   page.click({ cell: '0' });
   assert.equal(page.read('state.on[0]'), false);
+  assert.equal(page.read('armed'), null);
+  assert.equal(page.app.innerHTML.includes('arming'), false);
   const snapshot = page.read('state');
   page.run(`toggle(${FREE}); toggle(-1); toggle(16); toggle(0.5); toggle(NaN)`);
   assert.deepEqual(page.read('state'), snapshot);
@@ -370,7 +381,7 @@ test('two simultaneous lines count correctly and undo does not replay a celebrat
   page.run('toggle(0)');
   assert.equal(page.read('getProgress(state).wins.length'), 2);
   assert.equal(page.read('state.celebrated.length'), 2);
-  page.run('toggle(0)');
+  page.run('toggle(0); toggle(0)');
   assert.equal(page.read('getProgress(state).wins.length'), 0);
   page.run('toggle(0)');
   assert.equal(page.read('getProgress(state).wins.length'), 2);
@@ -433,7 +444,7 @@ test('normal celebration is brief, decorative, cleaned up, and never repeated fo
   page.run('[0,1,2,3].forEach(toggle)');
   assert.equal(page.elements.length, 29);
   assert.ok(page.elements.every(element => element.attributes['aria-hidden'] === 'true'));
-  page.run('toggle(0); toggle(0)');
+  page.run('toggle(0); toggle(0); toggle(0)');       // off and on again
   assert.equal(page.elements.length, 29);
   page.timers.forEach(callback => callback());
   assert.ok(page.elements.every(element => element.removed));
@@ -675,10 +686,10 @@ test('a completed card opens the summary by itself, still announcing the last bi
   assert.match(page.announcement.textContent, /How our night went\. 15 of 15 squares marked/);
 
   page.click({ action: 'board' });
-  page.run('toggle(15); toggle(15)');            // going back and forth does not re-trigger it
+  page.run('toggle(15); toggle(15); toggle(15)');   // ask, take it off, put it back
   assert.equal(page.read('view'), 'summary');
   page.click({ action: 'board' });
-  page.run('toggle(15)');
+  page.run('toggle(15); toggle(15)');
   assert.equal(page.read('view'), 'board');
 });
 
@@ -712,7 +723,8 @@ test('the contact sheet lays out one photo through sixteen without breaking', ()
     assert.ok(layout.height > 700 && layout.height < 2600, `${where}: ${layout.height}px tall`);
     assert.ok(layout.height / layout.width < 2.4, `${where}: too long and thin`);
     assert.ok(layout.photo.w >= 180 && layout.photo.w === layout.photo.h, `${where}: ${layout.photo.w}px photos`);
-    assert.equal(layout.cell.h, layout.photo.h + 24 + 46, where);
+    assert.equal(layout.cell.h, layout.photo.h + 24 + 66, where);
+    assert.ok(layout.timeSize >= 13 && layout.timeSize < layout.labelSize, where);
 
     for (const frame of layout.frames) {
       assert.equal(frame.w, layout.cell.w, where);
@@ -969,7 +981,7 @@ test('a backup file holds one player’s card, marks and photos, and nothing els
     start('Bee'); toggle(3); setPhoto('Bee', 3, ${JSON.stringify(theirs)}); start('Ace')`);
   const backup = page.read("backupOf('Ace')");
   assert.equal(backup.app, 'ns-bingo');
-  assert.equal(backup.version, 1);
+  assert.equal(backup.version, 2);
   assert.equal(backup.who, 'Ace');
   assert.match(backup.savedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(backup.card.who, 'Ace');
@@ -977,6 +989,10 @@ test('a backup file holds one player’s card, marks and photos, and nothing els
   assert.deepEqual(backup.card.on, page.read('book.cards.Ace.on'));
   assert.deepEqual(backup.card.celebrated, []);
   assert.ok(backup.card.started > 0, 'the night the card began travels with it');
+  assert.ok(backup.card.night > 20000000, 'and the night it was dealt from');
+  assert.equal(backup.card.at.length, CELLS);
+  assert.ok(backup.card.at[0] > 0 && backup.card.at[1] > 0, 'the times travel with the marks');
+  assert.equal(backup.card.at[2], null, 'an unticked square has no time');
   assert.deepEqual(Object.keys(backup.photos), ['0']);
   assert.equal(backup.photos[0], mine);
   assert.equal(JSON.stringify(backup).includes(theirs), false, 'the other player is not in this file');
@@ -995,7 +1011,7 @@ test('a backup file holds one player’s card, marks and photos, and nothing els
 
 test('a restore file is checked strictly and refused kindly, one reason at a time', () => {
   const page = boot({ search: '?who=Ace' });
-  const good = () => ({ app: 'ns-bingo', version: 1, savedAt: '2026-09-03T12:00:00.000Z', who: 'Ace',
+  const good = () => ({ app: 'ns-bingo', version: 2, savedAt: '2026-09-03T12:00:00.000Z', who: 'Ace',
     card: fullCard('Ace'), photos: { 3: jpeg(20) } });
   const check = value => page.read(`validBackup(${JSON.stringify(value)})`);
   const twist = change => { const value = good(); change(value); return value; };
@@ -1007,7 +1023,7 @@ test('a restore file is checked strictly and refused kindly, one reason at a tim
     ['shape', twist(value => { value.version = '1'; })],
     ['shape', twist(value => { value.version = 1.5; })],
     ['shape', twist(value => { delete value.version; })],
-    ['version', twist(value => { value.version = 2; })],       // a file from a newer card
+    ['version', twist(value => { value.version = 3; })],       // a file from a newer card
     ['version', twist(value => { value.version = 99; })],
     ['version', twist(value => { value.version = 0; })],
     ['player', twist(value => { value.who = 'Bob'; })],
@@ -1351,4 +1367,246 @@ test('every square label fits a narrow phone', () => {
     const longest = label.split(/\s+/).reduce((a, w) => Math.max(a, w.length), 0);
     assert.ok(longest <= 14, `"${label}" has a ${longest}-character word that will break badly`);
   }
+});
+
+/* ---------- one shared night ---------- */
+
+test('both phones are dealt the same fifteen squares, shuffled differently', () => {
+  const page = boot({ search: '?who=Ace' });
+  page.run("start('Bee', true)");
+  const ace = page.read('book.cards.Ace.cells').map(cell => cell.label);
+  const bee = page.read('book.cards.Bee.cells').map(cell => cell.label);
+  assert.deepEqual([...ace].sort(), [...bee].sort(), 'the same set of squares on both cards');
+  assert.notDeepEqual(ace, bee, 'in a different order');
+  assert.equal(ace[FREE], bee[FREE], 'the free square holds the same place on both');
+  for (const cells of [page.read('book.cards.Ace.cells'), page.read('book.cards.Bee.cells')]) {
+    assert.equal(cells.filter(cell => cell.kind === 'wildlife').length, 10);
+    assert.equal(cells.filter(cell => cell.kind === 'together').length, 5);
+  }
+  assert.match(page.app.innerHTML, /same fifteen squares tonight/);
+});
+
+test('the fifteen come from the night, so a fresh card reshuffles the same set', () => {
+  const page = boot({ search: '?who=Ace' });
+  const tonight = page.read('book.cards.Ace.cells').map(cell => cell.label).sort();
+  const again = page.read("newCard('Ace').cells.map(cell => cell.label)").sort();
+  assert.deepEqual(again, tonight, 'a fresh card tonight is the same fifteen');
+  // Different nights deal different sets. Two could coincide; five could not.
+  const sets = [0, 1, 2, 3, 4].map(day =>
+    page.read(`newCard('Ace', Date.now() + ${day} * 86400000).cells.map(cell => cell.label)`).sort().join('|'));
+  assert.ok(new Set(sets).size >= 4, 'each night has its own fifteen');
+});
+
+test('the night rolls over at 4am, so either side of midnight is still one evening', () => {
+  const page = boot();
+  const at = (y, m, d, h, min) => page.read(`nightOf(new Date(${y}, ${m}, ${d}, ${h}, ${min}).getTime())`);
+  assert.equal(at(2026, 8, 5, 23, 50), at(2026, 8, 6, 0, 10), 'ten past midnight is still Saturday night');
+  assert.equal(at(2026, 8, 5, 20, 0), 20260905);
+  assert.notEqual(at(2026, 8, 6, 3, 50), at(2026, 8, 6, 4, 10), 'four in the morning starts a new one');
+  for (const nonsense of ['nightOf(NaN)', "nightOf('soon')", 'nightOf(undefined)']) {
+    assert.equal(page.read(nonsense), 0, nonsense);
+  }
+});
+
+/* ---------- the night, in order ---------- */
+
+test('every tick keeps the time it happened, and unticking forgets it', () => {
+  const page = boot({ search: '?who=Ace' });
+  const fresh = page.read('book.cards.Ace.at');
+  assert.equal(fresh.length, CELLS);
+  assert.equal(fresh.filter(Boolean).length, 1, 'only the free square starts with a time');
+  assert.ok(fresh[FREE] >= page.read('book.cards.Ace.started'), 'turning up together is the first thing');
+  page.run('toggle(0)');
+  assert.ok(page.read('book.cards.Ace.at[0]') > 0);
+  page.run('toggle(0); toggle(0)');
+  assert.equal(page.read('book.cards.Ace.at[0]'), null, 'an untick takes its time with it');
+});
+
+test('a card saved before the clock still opens, and keeps its marks', () => {
+  const old = fullCard('Ace');           // no `at`, no `night`: exactly what the old card wrote
+  const page = boot({ stored: new Map([[KEY, JSON.stringify({ version: 3, active: 'Ace', cards: { Ace: old } })]]) });
+  const card = page.read('book.cards.Ace');
+  assert.deepEqual(card.on, old.on, 'the marks are untouched');
+  assert.equal(card.at.length, CELLS);
+  assert.equal(card.at[0], null, 'a mark from before the clock has no time to show');
+  assert.ok(card.at[FREE] > 0, 'the free square falls back to when the card began');
+  assert.ok(card.night > 20000000, 'and the night is worked out from that');
+});
+
+test('the summary lists the night in the order it happened', () => {
+  const page = boot({ search: '?who=Ace' });
+  page.run('toggle(9); toggle(2); toggle(11)');
+  page.run('book.cards.Ace.at[9] = 2000; book.cards.Ace.at[2] = 1000; book.cards.Ace.at[11] = 3000');
+  assert.deepEqual(page.read("timeline(book.cards.Ace, 'Ace').map(row => row.i)"), [2, 9, 11]);
+  // A square with no time sinks to the bottom, in board order, rather than to 1970.
+  page.run('book.cards.Ace.at[9] = null');
+  assert.deepEqual(page.read("timeline(book.cards.Ace, 'Ace').map(row => row.i)"), [2, 11, 9]);
+  page.run('book.cards.Ace.at[9] = 2000');
+
+  page.click({ action: 'summary' });
+  const html = page.app.innerHTML;
+  assert.match(html, /summary-timeline/);
+  assert.match(html, /class="summary-when"/);
+  const labels = page.read('book.cards.Ace.cells').map(cell => cell.label);
+  assert.ok(html.indexOf(labels[2]) < html.indexOf(labels[9]), 'earliest first');
+  assert.ok(html.indexOf(labels[9]) < html.indexOf(labels[11]), 'latest last');
+});
+
+test('the summary says how long the evening ran, and stays quiet when it cannot', () => {
+  const page = boot({ search: '?who=Ace' });
+  const rows = "timeline(book.cards.Ace, 'Ace')";
+  page.run('toggle(0); toggle(1)');
+  page.run('book.cards.Ace.started = 0; book.cards.Ace.at[0] = 0; book.cards.Ace.at[1] = 95 * 60000');
+  assert.match(page.read(`nightSpan(book.cards.Ace, ${rows})`), /1 hour and 35 minutes of it\.$/);
+  page.run('book.cards.Ace.at[1] = 60 * 60000');
+  assert.match(page.read(`nightSpan(book.cards.Ace, ${rows})`), /1 hour of it\.$/);
+  page.run('book.cards.Ace.at[1] = 7 * 60000');
+  assert.match(page.read(`nightSpan(book.cards.Ace, ${rows})`), /7 minutes of it\.$/);
+  // Nothing worth saying about a card that has only just been opened.
+  page.run('book.cards.Ace.at[1] = 60000');
+  assert.equal(page.read(`nightSpan(book.cards.Ace, ${rows})`), '');
+  assert.equal(page.read('nightSpan(book.cards.Ace, [])'), '');
+});
+
+/* ---------- the field guide, on the same phone ---------- */
+
+// The deal follows the date, so put known animals on the card rather than hoping for them.
+function withAnimals(page) {
+  page.run(`book.cards.Ace.cells[0] = { icon: 'o', label: 'Asian small-clawed otter', art: 'otter', kind: 'wildlife' };
+    book.cards.Ace.cells[1] = { icon: 't', label: 'A Malayan tapir, two-tone', art: 'tapir', kind: 'wildlife' };
+    book.cards.Ace.cells[2] = { icon: 's', label: 'Share a snack, half each', kind: 'together' };
+    book.cards.Ace.on[0] = false; book.cards.Ace.on[1] = false; book.cards.Ace.on[2] = false`);
+  return page;
+}
+
+test('ticking a wildlife square tells the field guide on this phone', () => {
+  const page = withAnimals(boot({ search: '?who=Ace' }));
+  page.run('toggle(0)');
+  assert.deepEqual(JSON.parse(page.stored.get('ns_dex_met')), ['otter'], 'a quiz friend is simply met');
+  assert.match(page.read('notice'), /New in your field guide: Otter/);
+  assert.match(page.announcement.textContent, /New in your field guide: Otter/);
+
+  // A bonus is earned by naming its silhouette, so a sighting only stamps it.
+  page.run('toggle(1)');
+  assert.deepEqual(JSON.parse(page.stored.get('ns_dex_wild_v1')), ['tapir']);
+  assert.deepEqual(JSON.parse(page.stored.get('ns_dex_met')), ['otter'], 'a bonus never unlocks itself');
+  assert.match(page.read('notice'), /Tapir spotted for real/);
+
+  // Unticking is not a retraction; the field guide keeps it, and the board says where to undo.
+  page.run('toggle(0); toggle(0)');
+  assert.deepEqual(JSON.parse(page.stored.get('ns_dex_met')), ['otter']);
+  assert.equal(page.read('notice'), null, 'and the notice does not linger');
+  assert.match(page.app.innerHTML, /the card itself has a button to put it back/);
+
+  // Our own little moments are nobody's sighting.
+  page.run('toggle(2)');
+  assert.equal(page.read('notice'), null);
+  assert.equal(page.stored.get('ns_dex_wild_v1'), '["tapir"]');
+});
+
+test('a sighting is written once, and only for animals we actually have', () => {
+  const page = withAnimals(boot({ search: '?who=Ace' }));
+  assert.equal(page.read("noteSighting('otter')"), 'met');
+  assert.equal(page.read("noteSighting('otter')"), null, 'already known, so nothing to say');
+  assert.equal(page.read("noteSighting('tapir')"), 'wild');
+  assert.equal(page.read("noteSighting('tapir')"), null);
+  for (const nobody of ['badger', '__proto__', '', null, 42]) {
+    assert.equal(page.read(`noteSighting(${JSON.stringify(nobody)})`), null, String(nobody));
+  }
+  // Somebody else's typing in the key is ignored rather than trusted, or thrown away noisily.
+  page.stored.set('ns_dex_met', '{"otter":true}');
+  assert.equal(page.read("noteSighting('dhole')"), 'met');
+  assert.deepEqual(JSON.parse(page.stored.get('ns_dex_met')), ['dhole']);
+  page.stored.set('ns_dex_met', 'not json at all');
+  assert.equal(page.read("noteSighting('tiger')"), 'met');
+  assert.deepEqual(JSON.parse(page.stored.get('ns_dex_met')), ['tiger']);
+});
+
+test('a browser that will not save still ticks squares, quietly', () => {
+  const page = withAnimals(boot({ search: '?who=Ace', storageDenied: true }));
+  assert.equal(page.read("noteSighting('otter')"), null);
+  page.run('toggle(0)');
+  assert.equal(page.read('book.cards.Ace.on[0]'), true, 'the square is still marked');
+  assert.equal(page.read('notice'), null, 'and nothing is claimed about a field guide');
+});
+
+test('a backup written before the clock still restores', () => {
+  const page = boot({ search: '?who=Ace' });
+  const older = { app: 'ns-bingo', version: 1, savedAt: '2026-09-03T12:00:00.000Z', who: 'Ace',
+    card: fullCard('Ace'), photos: { 3: jpeg(20) } };
+  const parsed = page.read(`validBackup(${JSON.stringify(older)})`);
+  assert.equal(parsed.ok, true, 'a version 1 file is still one of ours');
+  assert.equal(parsed.card.at.length, CELLS);
+  assert.ok(parsed.card.night > 20000000);
+  assert.deepEqual(parsed.card.on, older.card.on);
+});
+
+/* ---------- a moment is not lost to one stray tap ---------- */
+
+test('the question gives up on its own, so it is never waiting hours later', () => {
+  const page = boot({ search: '?who=Ace' });
+  page.run('toggle(0)');
+  page.run('toggle(0)');
+  assert.equal(page.read('armed'), 0);
+  page.timers.forEach(callback => callback());        // the window closes
+  assert.equal(page.read('armed'), null);
+  assert.equal(page.read('notice'), null);
+  assert.equal(page.app.innerHTML.includes('arming'), false);
+  // And the next tap is a fresh question rather than an unmarking.
+  page.run('toggle(0)');
+  assert.equal(page.read('state.on[0]'), true);
+  assert.equal(page.read('armed'), 0);
+});
+
+test('a stale window never disarms a newer question', () => {
+  const page = boot({ search: '?who=Ace' });
+  page.run('toggle(0); toggle(1)');
+  page.run('toggle(0)');                              // ask about square 0
+  const stale = page.timers.length;
+  page.run('toggle(1)');                              // change our mind, ask about square 1
+  assert.equal(page.read('armed'), 1);
+  page.timers.slice(0, stale).forEach(callback => callback());
+  assert.equal(page.read('armed'), 1, 'square 1 is still asking');
+  page.run('toggle(1)');
+  assert.equal(page.read('state.on[1]'), false);
+  assert.equal(page.read('state.on[0]'), true, 'and square 0 was never touched');
+});
+
+test('any other tap puts the question down, unanswered', () => {
+  const page = boot({ search: '?who=Ace' });
+  page.run('toggle(0)');
+  page.run('toggle(0)');
+  page.click({ photo: '3' });                         // reaching for the camera instead
+  assert.equal(page.read('armed'), null);
+  assert.equal(page.read('state.on[0]'), true, 'the mark survives');
+  assert.equal(page.app.innerHTML.includes('arming'), false);
+
+  // Escape is the ordinary way of saying "no, leave it".
+  page.run('toggle(0)');
+  assert.equal(page.read('armed'), 0);
+  page.docListeners.keydown({ key: 'Escape' });
+  assert.equal(page.read('armed'), null);
+  assert.equal(page.read('state.on[0]'), true);
+});
+
+test('leaving the board, or handing it over, always puts the question down', () => {
+  for (const leave of [page => page.click({ action: 'summary' }),
+    page => page.click({ player: 'Bee' }),
+    page => page.click({ action: 'reset' })]) {
+    const page = boot({ search: '?who=Ace', confirmResult: true });
+    page.run('toggle(0)');
+    page.run('toggle(0)');
+    assert.equal(page.read('armed'), 0);
+    leave(page);
+    assert.equal(page.read('armed'), null);
+  }
+});
+
+test('marking is never slowed down, only unmarking', () => {
+  const page = boot({ search: '?who=Ace' });
+  page.run('[0,1,2,3].forEach(toggle)');
+  assert.deepEqual(page.read('state.on').slice(0, 4), [true, true, true, true],
+    'four taps, four marks, no questions asked');
+  assert.equal(page.read('armed'), null);
+  assert.match(page.app.innerHTML, /To take one off again, tap it twice/);
 });

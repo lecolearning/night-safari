@@ -27,13 +27,8 @@
     return;
   }
 
-  // Short names for the small spaces. Falls back to the full name.
-  const SHORT = {
-    otter: 'Otter', dhole: 'Dhole', loris: 'Slow Loris', pangolin: 'Pangolin',
-    fishingcat: 'Fishing Cat', tiger: 'Tiger', binturong: 'Binturong',
-    tapir: 'Tapir', flyingsquirrel: 'Flying Squirrel', flyingfox: 'Flying Fox',
-    owl: 'Fish-owl', porcupine: 'Porcupine', elephant: 'Elephant',
-  };
+  // Short names for the small spaces, from animals.js. Falls back to the full name.
+  const SHORT = window.ANIMAL_SHORT || {};
   /* Names follow config.js, so the aliases stay on when NAMES_ON is false. */
   const PEOPLE = window.PEOPLE || {};
   const HIM = PEOPLE.me || 'Carrot';
@@ -69,6 +64,22 @@
   function saveSeen() {
     try { localStorage.setItem(DEX_KEY, JSON.stringify(SEEN)); } catch (e) { /* private mode. It still works for tonight. */ }
   }
+  // The bingo card meets animals too, possibly in another tab since this page loaded.
+  // Fold in whatever is on disk before writing, so nobody's sighting gets overwritten.
+  function mergeSeen() {
+    for (const k of readSeen()) if (SEEN.indexOf(k) < 0) SEEN.push(k);
+  }
+
+  /* Sightings that came from the bingo card. A quiz friend ticked over there is
+     simply met, and lands in SEEN. A bonus is earned by naming its silhouette, so
+     a real sighting cannot open one — it only adds a stamp to a card already won. */
+  const WILD_KEY = 'ns_dex_wild_v1';
+  let wild = [];
+  try {
+    const saved = JSON.parse(localStorage.getItem(WILD_KEY) || '[]');
+    if (Array.isArray(saved)) wild = [...new Set(saved.filter((k) => BONUS_ORDER.includes(k)))];
+  } catch (e) { /* private mode: no stamps, and nothing else changes. */ }
+  const spotted = (k) => isBonus(k) && wild.indexOf(k) >= 0;
 
   const isAuto = (k) => k === HIS_KEY || k === HER_KEY;   // these two need no button
   const BONUS_KEY = 'ns_dex_bonus_v1';
@@ -117,203 +128,23 @@
       + '<span class="dex-shadow-missing" hidden>Our shadow is hiding too. Try reloading in a little while.</span>';
   }
 
-  /* ============================================================
-     The calls. Every one is a few oscillators and a bit of noise:
-     an impression, not a recording. Nothing plays unprompted.
-     ============================================================ */
-  const CRY_NOTE = {
-    otter: 'A burst of excited squeaks, all at once, about nothing.',
-    dhole: "A rising whistle. It is how the pack says 'over here' in the dark.",
-    loris: 'A soft unhurried whistle. It will get there when it gets there.',
-    pangolin: 'Two small snuffles. Pangolins are famously almost silent, so this is generous.',
-    fishingcat: 'A chirrup, then a low rumble of approval.',
-    tiger: 'A long low roar, more felt than heard.',
-    binturong: 'A soft, sleepy chuckle. Still faintly popcorn-scented.',
-    tapir: 'A tiny whistle from someone in no particular hurry.',
-    flyingsquirrel: 'A quick little chirrup, then off to the next tree.',
-    flyingfox: 'Two soft chatters. Supper has been located.',
-    owl: 'Two rounded little hoots. A confident direction, probably.',
-    porcupine: 'A tiny rustle and a shy little snuffle.',
-    elephant: 'A warm, low rumble. The picnic is ready.',
-  };
-
-  let audio = null;            // AudioContext, made on the first tap
-  let playing = null;          // gain node of whatever is sounding now
-  let audioBroken = false;
-
-  function ctx() {
-    if (audioBroken) return null;
-    if (!audio) {
-      const Ctor = window.AudioContext || window.webkitAudioContext;
-      if (!Ctor) { audioBroken = true; return null; }
-      try { audio = new Ctor(); } catch (e) { audioBroken = true; return null; }
-    }
-    if (audio.state === 'suspended' && audio.resume) audio.resume().catch(() => {});
-    return audio;
-  }
-
-  function noiseBuffer(c) {
-    if (!c._dexNoise) {
-      const buf = c.createBuffer(1, Math.floor(c.sampleRate * 1.5), c.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-      c._dexNoise = buf;
-    }
-    return c._dexNoise;
-  }
-
-  // A pitched note that slides from f0 to f1.
-  function chirp(c, bus, at, o) {
-    const t = c.currentTime + at;
-    const osc = c.createOscillator();
-    const g = c.createGain();
-    osc.type = o.type || 'sine';
-    osc.frequency.setValueAtTime(o.f0, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(30, o.f1 || o.f0), t + o.dur);
-    const peak = o.gain || 0.2;
-    const rise = o.soft ? o.dur * 0.35 : 0.012;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(peak, t + rise);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
-    osc.connect(g).connect(bus);
-    osc.start(t);
-    osc.stop(t + o.dur + 0.05);
-  }
-
-  // A breathy puff of filtered noise.
-  function puff(c, bus, at, o) {
-    const t = c.currentTime + at;
-    const src = c.createBufferSource();
-    src.buffer = noiseBuffer(c);
-    const bp = c.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(o.f, t);
-    bp.Q.value = o.q || 1;
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(o.gain || 0.2, t + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
-    src.connect(bp).connect(g).connect(bus);
-    src.start(t);
-    src.stop(t + o.dur + 0.05);
-  }
-
-  // Something big and low, with the top rolled off.
-  function rumble(c, bus, at, o) {
-    const t = c.currentTime + at;
-    const osc = c.createOscillator();
-    const lp = c.createBiquadFilter();
-    const g = c.createGain();
-    osc.type = o.saw ? 'sawtooth' : 'sine';
-    osc.frequency.setValueAtTime(o.f0, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(25, o.f1 || o.f0), t + o.dur);
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(o.cut || 420, t);
-    lp.frequency.exponentialRampToValueAtTime(180, t + o.dur);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(o.gain || 0.3, t + Math.min(0.08, o.dur * 0.3));
-    g.gain.exponentialRampToValueAtTime(0.0001, t + o.dur);
-    osc.connect(lp).connect(g).connect(bus);
-    osc.start(t);
-    osc.stop(t + o.dur + 0.05);
-  }
-
-  const CRIES = {
-    otter: (c, bus) => {
-      for (let i = 0; i < 5; i++) {
-        chirp(c, bus, i * 0.085, { type: 'triangle', f0: 880 + i * 95, f1: 1480 + i * 95, dur: 0.07, gain: 0.2 });
-      }
-      chirp(c, bus, 0.47, { type: 'triangle', f0: 1300, f1: 900, dur: 0.12, gain: 0.16 });
-    },
-    dhole: (c, bus) => {
-      chirp(c, bus, 0, { type: 'sine', f0: 720, f1: 1680, dur: 0.26, gain: 0.22 });
-      chirp(c, bus, 0.25, { type: 'sine', f0: 1680, f1: 1180, dur: 0.32, gain: 0.18 });
-      chirp(c, bus, 0.66, { type: 'sine', f0: 900, f1: 1500, dur: 0.2, gain: 0.14 });
-    },
-    loris: (c, bus) => {
-      chirp(c, bus, 0, { type: 'sine', f0: 620, f1: 800, dur: 0.5, gain: 0.14, soft: true });
-      chirp(c, bus, 0.62, { type: 'sine', f0: 780, f1: 560, dur: 0.5, gain: 0.11, soft: true });
-    },
-    pangolin: (c, bus) => {
-      puff(c, bus, 0, { f: 780, q: 1.1, dur: 0.16, gain: 0.26 });
-      puff(c, bus, 0.26, { f: 540, q: 1.1, dur: 0.22, gain: 0.22 });
-      rumble(c, bus, 0.3, { f0: 120, f1: 90, dur: 0.25, gain: 0.12 });
-    },
-    fishingcat: (c, bus) => {
-      chirp(c, bus, 0, { type: 'triangle', f0: 1150, f1: 720, dur: 0.11, gain: 0.2 });
-      chirp(c, bus, 0.16, { type: 'triangle', f0: 980, f1: 640, dur: 0.14, gain: 0.18 });
-      rumble(c, bus, 0.36, { f0: 72, f1: 58, dur: 0.55, gain: 0.3, saw: true, cut: 300 });
-    },
-    tiger: (c, bus) => {
-      rumble(c, bus, 0, { f0: 92, f1: 60, dur: 1.15, gain: 0.42, saw: true, cut: 520 });
-      puff(c, bus, 0.04, { f: 240, q: 0.8, dur: 1.0, gain: 0.16 });
-      rumble(c, bus, 0.02, { f0: 46, f1: 38, dur: 1.2, gain: 0.28 });
-    },
-    binturong: (c, bus) => {
-      // Rounded little "hoo" notes instead of short sawtooth bursts, which
-      // made the chuckle sound like a buzzing speaker. A little breath keeps
-      // it warm; each note eases in and fades out before the next one starts.
-      [0, 0.25, 0.52].forEach((at, i) => {
-        chirp(c, bus, at, { type: 'sine', f0: 330 - i * 30, f1: 220 - i * 15,
-          dur: 0.2 + i * 0.03, gain: 0.13 - i * 0.02, soft: true });
-        puff(c, bus, at + 0.01, { f: 700 - i * 60, q: 0.7, dur: 0.16 + i * 0.02, gain: 0.025 });
-      });
-    },
-    tapir: (c, bus) => {
-      chirp(c, bus, 0, { f0: 640, f1: 880, dur: 0.3, gain: 0.12, soft: true });
-      chirp(c, bus, 0.4, { f0: 820, f1: 620, dur: 0.22, gain: 0.09, soft: true });
-    },
-    flyingsquirrel: (c, bus) => {
-      [0, 0.17, 0.37].forEach((at, i) => chirp(c, bus, at,
-        { f0: 920 + i * 70, f1: 1250 - i * 40, dur: 0.12, gain: 0.09, soft: true }));
-    },
-    flyingfox: (c, bus) => {
-      [0, 0.28].forEach((at, i) => chirp(c, bus, at,
-        { f0: 570 - i * 50, f1: 340, dur: 0.2, gain: 0.1, soft: true }));
-    },
-    owl: (c, bus) => {
-      [0, 0.42].forEach((at, i) => chirp(c, bus, at,
-        { f0: 440 - i * 35, f1: 350 - i * 25, dur: 0.3, gain: 0.1, soft: true }));
-    },
-    porcupine: (c, bus) => {
-      puff(c, bus, 0, { f: 580, q: 0.8, dur: 0.24, gain: 0.035 });
-      chirp(c, bus, 0.28, { f0: 340, f1: 260, dur: 0.22, gain: 0.07, soft: true });
-    },
-    elephant: (c, bus) => {
-      rumble(c, bus, 0, { f0: 100, f1: 65, dur: 0.8, gain: 0.18, cut: 300 });
-      puff(c, bus, 0.05, { f: 220, q: 0.8, dur: 0.65, gain: 0.025 });
-    },
-  };
+  /* The calls moved to animal-calls.js so the guessing game can use the same ones.
+     This page still decides who may be heard: a shadow's call would give it away. */
+  const CALLS = (typeof window !== 'undefined' && window.ANIMAL_CALLS) || null;
+  const callNote = (k) => (CALLS ? CALLS.note(k) : '');
 
   function playCry(key, btn) {
     if (!ORDER.includes(key) || !isMet(key)) return;
-    const c = ctx();
-    if (!c || !CRIES[key]) {
-      say('This browser would rather stay quiet. The animals understand.');
-      return;
-    }
-    // Hush whatever is already sounding, gently.
-    if (playing) {
-      try {
-        playing.gain.cancelScheduledValues(c.currentTime);
-        playing.gain.setValueAtTime(playing.gain.value || 0.0001, c.currentTime);
-        playing.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.06);
-      } catch (e) { /* already finished */ }
-    }
-    const bus = c.createGain();
-    bus.gain.value = 0.9;
-    bus.connect(c.destination);
-    playing = bus;
-    try { CRIES[key](c, bus); } catch (e) { say('That call did not come out right. Try again?'); return; }
-    setTimeout(() => { try { bus.disconnect(); } catch (e) {} if (playing === bus) playing = null; }, 2600);
-
+    const how = CALLS ? CALLS.play(key) : 'quiet';
+    if (how === 'quiet') { say('This browser would rather stay quiet. The animals understand.'); return; }
+    if (how === 'broken') { say('That call did not come out right. Try again?'); return; }
     if (btn) {
       btn.classList.remove('playing');
       void btn.offsetWidth;
       btn.classList.add('playing');
       setTimeout(() => btn.classList.remove('playing'), 700);
     }
-    say(short(key) + ': ' + CRY_NOTE[key]);
+    say(short(key) + ': ' + callNote(key));
   }
 
   /* ============================================================
@@ -359,7 +190,7 @@
         + '<span class="dex-pic">' + pic(k) + '</span>'
         + '<span class="dex-name">' + esc(short(k)) + '</span>'
         + '<span class="dex-species">' + esc(an.name) + '</span>'
-        + '<span class="dex-status">' + (isBonus(k) ? 'Bonus earned ✓' : 'Met ✓') + '</span>'
+        + '<span class="dex-status">' + (isBonus(k) ? (spotted(k) ? 'Earned · spotted ✓' : 'Bonus earned ✓') : 'Met ✓') + '</span>'
         + '</button>'
         + '<button type="button" class="dex-sound" data-cry="' + esc(k) + '" aria-label="Hear the ' + esc(lower(k)) + '">'
         + '<span aria-hidden="true">♪</span></button>'
@@ -393,6 +224,9 @@
       + '<p class="dex-note">No. 008 is not a mistake. Some introductions can wait.</p></section>'
       + '<div class="stack" style="margin-top:16px">'
       + '<a class="btn mint" href="bingo.html">Open the bingo card</a>'
+      // Four is the smallest set the guessing game can offer a choice from. Below
+      // that it would only be a locked door, so there is no door at all.
+      + (metCount() >= 4 ? '<a class="btn lilac" href="calls.html">Who’s that call? ♪</a>' : '')
       + '<a class="btn paper" href="index.html">Back to the story</a>'
       + '</div></div>';
   }
@@ -596,8 +430,10 @@
         + '<button class="btn mint" type="button" data-show-keepsakes>See our group pictures 🎁</button></div>' : '')
       + '<button type="button" class="dex-cry" data-cry="' + esc(k) + '">'
       + '<span aria-hidden="true">♪</span> Hear the ' + esc(lower(k)) + '</button>'
-      + '<p class="dex-crynote">' + esc(CRY_NOTE[k] || '') + ' Synthesised on the spot by a browser that has never met one.</p>'
+      + '<p class="dex-crynote">' + esc(callNote(k)) + ' Synthesised on the spot by a browser that has never met one.</p>'
 
+      + (spotted(k) ? '<div class="idblock dex-spotted"><b>Spotted for real ✓</b>You ticked this one on the bingo card, '
+        + 'so this is not only a shadow you named. You stood in front of it.</div>' : '')
       + '<div class="idblock"><b>One true thing</b>' + esc(an.fact) + '</div>'
       + '<div class="idblock"><b>Where to find it on Saturday</b>' + esc(an.findme) + '</div>'
       + '<div class="idblock"><b>Strengths</b>' + listHTML(an.strengths) + '</div>'
@@ -606,7 +442,7 @@
       + '<div class="idblock"><b>Alignment</b>' + escBr(an.alignment)
       + '<b style="margin-top:10px">Hidden talent</b>' + esc(an.talent) + '</div>'
       + '<div class="idblock"><b>Peer reviews</b>' + peersHTML(an.peers) + '</div>'
-      + '<div class="idfoot">No. ' + num(k) + ' · ' + (isBonus(k) ? 'trail bonus earned ✓' : 'met ✓') + '</div>'
+      + '<div class="idfoot">No. ' + num(k) + ' · ' + (isBonus(k) ? 'trail bonus earned ✓' + (spotted(k) ? ' · spotted' : '') : 'met ✓') + '</div>'
       + (isBonus(k) ? '<p class="dex-locknote">' + (bonusSaved ? 'Your bonus is saved on this device. Spotting the real animal is a separate little joy.' : 'This browser could not save your bonus. Keep this tab open to keep it for this visit.') + '</p>' : '')
       // Only for the ones unlocked by hand. The other two were never a claim.
       + (isAuto(k) || isBonus(k) ? ''
@@ -635,7 +471,8 @@
     const originals = CORE_ORDER.filter(isMet).length;
     const bonuses = BONUS_ORDER.filter(isMet).length;
     const line = '<b>' + n + ' of ' + N + '</b> cards collected. ' + originals + ' quiz friends · ' + bonuses + ' trail bonuses. '
-      + who + (n === N ? 'The whole collection. A lovely little record of your curiosity.' : 'Meet the quiz cast at the park; play the lilac bonus cards whenever you like.');
+      + who + (n === N ? 'The whole collection. A lovely little record of your curiosity.'
+        : 'Meet the quiz cast at the park — ticking a wildlife square on the bingo card counts — and play the lilac bonus cards whenever you like.');
     return '<span class="dex-pips" aria-hidden="true">' + pips + '</span><p>' + line + '</p>';
   }
   function paintProgress() { if (progressBox) progressBox.innerHTML = progressHTML(); }
@@ -644,7 +481,9 @@
   let justMet = null;          // the card to sparkle on the next paint
 
   function unlock(k) {
-    if (!CORE_ORDER.includes(k) || isMet(k)) return;
+    if (!CORE_ORDER.includes(k)) return;
+    mergeSeen();
+    if (isMet(k)) return;
     SEEN.push(k);
     saveSeen();
     justMet = k;
@@ -658,6 +497,7 @@
 
   function relock(k) {
     if (!CORE_ORDER.includes(k)) return;
+    mergeSeen();
     const i = SEEN.indexOf(k);
     if (i < 0) return;                    // the automatic two are not up for debate
     SEEN.splice(i, 1);
