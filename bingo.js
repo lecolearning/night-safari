@@ -11,6 +11,11 @@ const FREE_INDEX = 5;                    // row 2, column 2 — sits on the ↘ 
 const MOMENTS = CELLS - 1;               // fifteen to fill; the middle is already yours
 const WILDLIFE_PER_CARD = 10;
 const TOGETHER_PER_CARD = MOMENTS - WILDLIFE_PER_CARD;
+// Six of the fifteen are the same on both phones. Enough for a race and for
+// "you got that one too!", and few enough that most of the card is still yours.
+const SHARED_WILDLIFE = 4;
+const SHARED_TOGETHER = 2;
+const SHARED_PER_CARD = SHARED_WILDLIFE + SHARED_TOGETHER;
 const LABEL_MAX = 32;                    // keeps every label on a narrow phone without ugly breaks
 const UNMARK_WINDOW = 6000;              // how long a square keeps asking before it lets it go
 const KEY = 'ns_bingo_v3';
@@ -127,10 +132,11 @@ function shuffle(items, random = Math.random) {
   return result;
 }
 
-/* ---------- one shared night ---------- */
-// Two phones, two cards, and nothing in common between them. So the fifteen squares
-// are drawn from the date rather than from chance: both cards hold the same set, and
-// "you got that one too!" is true. Anything before 4am belongs to the evening that
+/* ---------- six squares in common ---------- */
+// Two phones, two cards, and nothing in common between them. So six of the squares
+// are drawn from the date rather than from chance: those six land on both cards, and
+// "you got that one too!" is true of them. The other nine stay each phone's own, so
+// the card still feels like yours. Anything before 4am belongs to the evening that
 // just was, so a card started at 23:50 and one at 00:10 are still the same night.
 const NIGHT_ROLLOVER_HOUR = 4;
 function nightOf(when) {
@@ -153,13 +159,20 @@ function seeded(seed) {
 function newCard(who, when = Date.now()) {
   const night = nightOf(when);
   const pick = seeded(night);
-  // Which fifteen: the night decides, the same way on both phones.
-  const chosen = [
-    ...shuffle(WILDLIFE, pick).slice(0, WILDLIFE_PER_CARD),
-    ...shuffle(TOGETHER, pick).slice(0, TOGETHER_PER_CARD),
-  ];
-  // Where they land: ordinary chance, so the two boards never look alike.
-  const cells = shuffle(chosen);
+  // The six: the night decides, the same way on both phones.
+  const both = [
+    ...shuffle(WILDLIFE, pick).slice(0, SHARED_WILDLIFE),
+    ...shuffle(TOGETHER, pick).slice(0, SHARED_TOGETHER),
+  ].map(cell => ({ ...cell, shared: true }));
+  // The other nine: this phone's own, drawn from whatever the six left behind.
+  const taken = new Set(both.map(cell => cell.label));
+  const spare = list => shuffle(list.filter(cell => !taken.has(cell.label)));
+  const mine = [
+    ...spare(WILDLIFE).slice(0, WILDLIFE_PER_CARD - SHARED_WILDLIFE),
+    ...spare(TOGETHER).slice(0, TOGETHER_PER_CARD - SHARED_TOGETHER),
+  ].map(cell => ({ ...cell }));
+  // Where they all land: ordinary chance, so the two boards never look alike.
+  const cells = shuffle(both.concat(mine));
   cells.splice(FREE_INDEX, 0, { ...FREE_CELL });
   const at = cells.map(() => null);
   at[FREE_INDEX] = when;                 // turning up together is the first thing that happened
@@ -175,7 +188,9 @@ function validCard(value, who) {
     return { icon: cell.icon, label: cell.label,
       art: ART_KEYS.includes(cell.art) ? cell.art :
         WILDLIFE.find(item => item.label === cell.label && ART_KEYS.includes(item.art))?.art,
-      kind: ['wildlife', 'together', 'free'].includes(cell.kind) ? cell.kind : 'together' };
+      kind: ['wildlife', 'together', 'free'].includes(cell.kind) ? cell.kind : 'together',
+      // Cards dealt before the two had squares in common simply have none marked.
+      ...(cell.shared === true ? { shared: true } : {}) };
   });
   if (cells.some(cell => !cell)) return null;
   cells[FREE_INDEX] = { ...FREE_CELL };
@@ -834,13 +849,15 @@ function cellHTML(cell, i, winCells) {
   const label = escapeHTML(cell.label);
   const position = `Row ${Math.floor(i / SIZE) + 1}, column ${i % SIZE + 1}`;
   const asking = armed === i;
+  const both = cell.shared === true;
   const classes = ['cell', state.on[i] && 'on', free && 'free', winCells.has(i) && 'win',
-    photo && 'has-photo', asking && 'arming'];
+    photo && 'has-photo', asking && 'arming', both && 'shared'];
   return `<div class="cell-wrap">
     <button type="button" class="${classes.filter(Boolean).join(' ')}"
       data-cell="${i}" data-kind="${cell.kind}" aria-pressed="${state.on[i]}" ${free ? 'aria-disabled="true"' : ''}
-      aria-label="${label}${free ? '. Free square, always marked' : ''}${photo ? '. Has a photo' : ''}${asking ? '. Marked. Activate again to unmark it' : ''}. ${position}">
+      aria-label="${label}${free ? '. Free square, always marked' : ''}${both ? '. On the other card too' : ''}${photo ? '. Has a photo' : ''}${asking ? '. Marked. Activate again to unmark it' : ''}. ${position}">
       ${photo ? `<img class="cell-photo" src="${escapeHTML(photo)}" alt="" aria-hidden="true">` : ''}
+      ${both ? '<span class="cell-shared" aria-hidden="true">both</span>' : ''}
       <span class="cell-check" aria-hidden="true">${state.on[i] ? '✓' : ''}</span>
       <span class="bingo-icon" aria-hidden="true"><span>${escapeHTML(cell.icon)}</span>${cell.art ? `<img src="img/${cell.art}.webp" alt="" width="40" height="40" loading="lazy" data-fallback>` : ''}</span>
       <span class="cell-label">${label}</span>${free ? '<span class="cell-free-label" aria-hidden="true">FREE</span>' : ''}${asking ? '<span class="cell-undo-hint" aria-hidden="true">tap again</span>' : ''}
@@ -947,12 +964,15 @@ function keepsakeHTML(photos) {
     </div>`;
 }
 
-// Both cards are dealt from the date, so tonight they hold the same fifteen squares.
-// A card carried over from an earlier night keeps that night's set, and says so.
+// The six marked "both" are dealt from the date, so they land on the other phone too.
+// A card carried over from an earlier night keeps that night's six, and says so.
 function sharedSetLine() {
+  const other = NAMES.filter(who => who !== state.who)[0];
+  const both = state.cells.filter(cell => cell.shared === true).length;
+  if (!both) return 'This card was dealt before the two cards had squares in common, so all fifteen are its own.';
   return state.night === nightOf(Date.now())
-    ? `Both phones were dealt the same fifteen squares tonight, shuffled into a different order. Whoever ticks one first, ${NAMES.filter(who => who !== state.who)[0]} has it too.`
-    : 'This card was dealt on an earlier night, so it keeps that night’s fifteen squares. A fresh card would follow tonight’s.';
+    ? `The ${both} squares marked “both” are on ${other}’s card as well, so those are a race. The other nine are yours alone.`
+    : `The ${both} “both” squares came from an earlier night, so they may not match ${other}’s card tonight. A fresh card would follow tonight’s.`;
 }
 
 function boardHTML() {
@@ -973,7 +993,7 @@ function boardHTML() {
         <div class="bingo-players" role="group" aria-label="Switch player; both cards are kept">${NAMES.map(who =>
           `<button type="button" data-player="${who}" aria-pressed="${who === state.who}" aria-label="${who}’s card">${who}</button>`).join('')}</div></div>
       <p id="bingo-help" class="bingo-instructions">Tap a square to mark it. To take one off again, tap it twice — a stray tap in the dark costs nothing. Four across, down or diagonally makes a bingo. The little 📷 on each square adds a photo.</p>
-      <div class="bingo-legend" aria-hidden="true"><span>🌿 Wildlife</span><span>💗 Us being us</span><span>💛 A free square</span></div>
+      <div class="bingo-legend" aria-hidden="true"><span>🌿 Wildlife</span><span>💗 Us being us</span><span>💛 A free square</span><span>◆ On both cards</span></div>
       <p class="bingo-shared-note">${sharedSetLine()}</p>
       ${notice ? `<p class="bingo-notice" role="status">${escapeHTML(notice)}</p>` : ''}
       <div class="grid" role="group" aria-label="${state.who}’s ${SIZE} by ${SIZE} bingo card" aria-describedby="bingo-help">${
@@ -1080,7 +1100,7 @@ function showBoard() {
   app.querySelector('#bingo-heading').focus({ preventScroll: true });
 }
 function reset() {
-  if (!state || !confirm(`Start a fresh card for ${state.who}? This clears only ${state.who}’s squares and photos, and deals tonight’s same fifteen squares in a new order. The other player’s card stays safe.`)) return;
+  if (!state || !confirm(`Start a fresh card for ${state.who}? This clears only ${state.who}’s squares and photos. Tonight’s six shared squares stay; the other nine are drawn again. The other player’s card stays safe.`)) return;
   clearPhotos(state.who);
   book.cards[state.who] = newCard(state.who);
   start(state.who, true);

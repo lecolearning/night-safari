@@ -564,7 +564,7 @@ test('each square offers a camera button; a photo turns it into the tile and a v
   const photo = jpeg(24);
   page.run(`setPhoto('Ace', 4, ${JSON.stringify(photo)}); render()`);
   assert.match(page.app.innerHTML, /class="cell-photo" src="data:image\/jpeg;base64,/);
-  assert.match(page.app.innerHTML, /class="cell[^"]*has-photo"[^>]*data-cell="4"/);
+  assert.match(page.app.innerHTML, /class="cell[^"]*has-photo[^"]*"[^>]*data-cell="4"/);
   assert.match(page.app.innerHTML, /data-view-photo="4"/);
   assert.equal(page.app.innerHTML.includes('data-photo="4"'), false, 'that square now opens its photo instead');
   assert.match(page.app.innerHTML, /1 photo tucked into this card/);
@@ -1371,30 +1371,53 @@ test('every square label fits a narrow phone', () => {
 
 /* ---------- one shared night ---------- */
 
-test('both phones are dealt the same fifteen squares, shuffled differently', () => {
+test('six squares land on both phones, and the other nine belong to one', () => {
   const page = boot({ search: '?who=Ace' });
   page.run("start('Bee', true)");
-  const ace = page.read('book.cards.Ace.cells').map(cell => cell.label);
-  const bee = page.read('book.cards.Bee.cells').map(cell => cell.label);
-  assert.deepEqual([...ace].sort(), [...bee].sort(), 'the same set of squares on both cards');
-  assert.notDeepEqual(ace, bee, 'in a different order');
-  assert.equal(ace[FREE], bee[FREE], 'the free square holds the same place on both');
-  for (const cells of [page.read('book.cards.Ace.cells'), page.read('book.cards.Bee.cells')]) {
-    assert.equal(cells.filter(cell => cell.kind === 'wildlife').length, 10);
+  const cards = [page.read('book.cards.Ace.cells'), page.read('book.cards.Bee.cells')];
+  const shared = cards.map(cells => cells.filter(cell => cell.shared === true).map(cell => cell.label));
+
+  assert.equal(shared[0].length, 6);
+  assert.deepEqual([...shared[0]].sort(), [...shared[1]].sort(), 'the same six on both cards');
+  for (const cells of cards) {
+    const both = cells.filter(cell => cell.shared === true);
+    assert.equal(both.filter(cell => cell.kind === 'wildlife').length, 4);
+    assert.equal(both.filter(cell => cell.kind === 'together').length, 2);
+    assert.equal(cells.filter(cell => cell.kind === 'wildlife').length, 10, 'the card is still ten and five');
     assert.equal(cells.filter(cell => cell.kind === 'together').length, 5);
+    assert.equal(new Set(cells.map(cell => cell.label)).size, CELLS, 'and nobody appears twice');
+    assert.notEqual(cells[FREE].shared, true, 'the free square is nobody else’s');
   }
-  assert.match(page.app.innerHTML, /same fifteen squares tonight/);
+  // Nine of each card are its own draw, so the two boards are not the same board.
+  assert.notDeepEqual(cards[0].map(cell => cell.label), cards[1].map(cell => cell.label));
+  assert.match(page.app.innerHTML, /squares marked “both” are on Ace’s card as well/);
+  assert.match(page.app.innerHTML, /The other nine are yours alone/);
+  assert.equal((page.app.innerHTML.match(/class="cell-shared"/g) || []).length, 6, 'and they say so');
 });
 
-test('the fifteen come from the night, so a fresh card reshuffles the same set', () => {
+test('the six come from the night; the nine are drawn again every time', () => {
   const page = boot({ search: '?who=Ace' });
-  const tonight = page.read('book.cards.Ace.cells').map(cell => cell.label).sort();
-  const again = page.read("newCard('Ace').cells.map(cell => cell.label)").sort();
-  assert.deepEqual(again, tonight, 'a fresh card tonight is the same fifteen');
-  // Different nights deal different sets. Two could coincide; five could not.
-  const sets = [0, 1, 2, 3, 4].map(day =>
-    page.read(`newCard('Ace', Date.now() + ${day} * 86400000).cells.map(cell => cell.label)`).sort().join('|'));
-  assert.ok(new Set(sets).size >= 4, 'each night has its own fifteen');
+  const sixOf = card => card.cells.filter(cell => cell.shared === true).map(cell => cell.label).sort().join('|');
+  const nineOf = card => card.cells.filter(cell => cell.shared !== true && cell.kind !== 'free')
+    .map(cell => cell.label).sort().join('|');
+
+  const draws = [0, 1, 2, 3, 4].map(() => page.read("newCard('Ace')"));
+  assert.equal(new Set(draws.map(sixOf)).size, 1, 'the same six all evening');
+  assert.equal(sixOf(page.read('book.cards.Ace')), sixOf(draws[0]), 'including the card already dealt');
+  assert.ok(new Set(draws.map(nineOf)).size >= 4, 'and a fresh nine each time');
+
+  // Different nights bring a different six. Two could coincide; five could not.
+  const nights = [0, 1, 2, 3, 4].map(day =>
+    sixOf(page.read(`newCard('Ace', Date.now() + ${day} * 86400000)`)));
+  assert.ok(new Set(nights).size >= 4, 'each night has its own six');
+});
+
+test('a card dealt before any of this was shared simply has no six', () => {
+  const older = fullCard('Ace');                   // no `shared` flags anywhere
+  const page = boot({ stored: new Map([[KEY, JSON.stringify({ version: 3, active: 'Ace', cards: { Ace: older } })]]) });
+  assert.equal(page.read('book.cards.Ace.cells').filter(cell => cell.shared === true).length, 0);
+  assert.match(page.app.innerHTML, /all fifteen are its own/);
+  assert.equal(page.app.innerHTML.includes('cell-shared'), false);
 });
 
 test('the night rolls over at 4am, so either side of midnight is still one evening', () => {
@@ -1609,4 +1632,28 @@ test('marking is never slowed down, only unmarking', () => {
     'four taps, four marks, no questions asked');
   assert.equal(page.read('armed'), null);
   assert.match(page.app.innerHTML, /To take one off again, tap it twice/);
+});
+
+test('every night for a year deals a whole card, with six of it shared', () => {
+  const page = boot();
+  const start = Date.UTC(2026, 0, 1, 20, 0);
+  const sixes = new Set();
+  for (let day = 0; day < 400; day++) {
+    const when = start + day * 86400000;
+    const [ace, bee] = ['Ace', 'Bee'].map(who => page.read(`newCard('${who}', ${when})`));
+    const where = `night ${day}`;
+    for (const card of [ace, bee]) {
+      assert.equal(card.cells.length, CELLS, where);
+      assert.equal(new Set(card.cells.map(cell => cell.label)).size, CELLS, `${where}: a repeated square`);
+      assert.equal(card.cells.filter(cell => cell.kind === 'wildlife').length, 10, where);
+      assert.equal(card.cells.filter(cell => cell.kind === 'together').length, 5, where);
+      assert.equal(card.cells.filter(cell => cell.shared === true).length, 6, where);
+      assert.equal(card.cells[FREE].label, 'Here with you', where);
+    }
+    const six = card => card.cells.filter(cell => cell.shared === true).map(cell => cell.label).sort().join('|');
+    assert.equal(six(ace), six(bee), `${where}: the two phones disagree about the six`);
+    sixes.add(six(ace));
+  }
+  // Not the same six night after night, and not a tiny handful of repeats either.
+  assert.ok(sixes.size > 350, `only ${sixes.size} different sixes in 400 nights`);
 });

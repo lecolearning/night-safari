@@ -38,13 +38,17 @@ files after adding art, resize scenes to 1100px wide and portraits to 720px squa
 then save as WebP at quality 88 to 90. Prompts for generating more art are in
 `PROMPTS.md`.
 
-## One shared night
+## Six squares in common
 
-Both phones deal their cards from the date rather than from chance, so the two cards
-hold **the same fifteen squares in a different order**. That makes it a race instead of
-two solitaires, and it needs no server, no signal and no pairing. The night rolls over
-at 4am, so a card started at 23:50 and one started at 00:10 still match. A card carried
-over from an earlier night keeps that night's fifteen, and the board says so.
+**Six of the fifteen** — four wildlife, two little moments — are dealt from the date
+rather than from chance, so they land on both phones. They wear a dotted top edge and a
+small `both` in the corner, and they are the race. The other nine are each phone's own
+draw, so the card still feels like yours.
+
+It needs no server, no signal and no pairing. The night rolls over at 4am, so a card
+started at 23:50 and one started at 00:10 still share their six. A card carried over
+from an earlier night keeps that night's six and says so; a fresh card keeps tonight's
+six and redraws the other nine. Cards dealt before any of this simply have none marked.
 
 Cards still do not sync: marks, photos and progress stay on the phone that made them.
 
@@ -141,8 +145,8 @@ access control; the public image files are not encrypted.
 - `index.html?result=otter` shows a result card. Valid: `otter`, `dhole`, `loris`,
   `pangolin`, `fishingcat`, `tiger`, `binturong`.
 - `bingo.html?who=Onion` skips the player picker. Use whatever labels `config.js` is set to.
-- The bingo deal is seeded by the date, so a card made on the same day is always the
-  same fifteen squares. To see a different set, change the system date.
+- The six shared squares are seeded by the date, so they are the same all evening and
+  on both phones. To see a different six, change the system date.
 
 ## The bingo password
 
