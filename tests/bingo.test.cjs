@@ -144,11 +144,12 @@ test('first visit is a warm player picker, with no accidental card creation', ()
 
 test('the board is four by four with a free square on a diagonal', () => {
   const page = boot({ search: '?who=Ace' });
-  assert.equal(page.read('SIZE'), 4);
-  assert.equal(page.read('CELLS'), CELLS);
-  assert.equal(page.read('MOMENTS'), MOMENTS);
-  assert.equal(page.read('FREE_INDEX'), FREE);
-  const lines = page.read('LINES');
+  assert.deepEqual(page.read('SIZES'), [4, 5]);
+  assert.equal(page.read('cellsOf(4)'), CELLS);
+  assert.equal(page.read('momentsOf(4)'), MOMENTS);
+  assert.equal(page.read('freeOf(4)'), FREE);
+  assert.equal(page.read('book.cards.Ace.size'), 4, 'a card starts small');
+  const lines = page.read('linesOf(4)');
   assert.equal(lines.length, 10);                                   // 4 rows + 4 columns + 2 diagonals
   assert.equal(new Set(lines.map(line => line.join(','))).size, 10);
   assert.ok(lines.every(line => line.length === 4));
@@ -157,7 +158,7 @@ test('the board is four by four with a free square on a diagonal', () => {
   assert.deepEqual(lines.at(-1), [3, 6, 9, 12]);
   assert.ok(lines.slice(-2).some(line => line.includes(FREE)), 'free square sits on a diagonal');
   assert.match(page.app.innerHTML, /4 by 4 bingo card/);
-  assert.match(page.app.innerHTML, /Four across, down or diagonally/);
+  assert.match(page.app.innerHTML, /4 in a row, across, down or diagonally/);
 });
 
 test('500 fresh cards balance ten wildlife, five shared moments and a free middle', () => {
@@ -209,7 +210,8 @@ test('every label fits a four-column square at a 360 pixel viewport', () => {
 
   // Layout arithmetic straight from the bingo CSS, at the narrow-phone breakpoint.
   const narrow = css.match(/@media\(max-width:380px\)\{([\s\S]*?)\n\}/)[1];
-  assert.match(css, /\n\.grid\{[^}]*grid-template-columns:repeat\(4,/, 'the grid must be four columns');
+  assert.match(css, /\n\.grid\{[^}]*grid-template-columns:repeat\(var\(--across,4\),/,
+    'the grid takes its column count from the card');
   assert.match(narrow, /\.grid\{gap:5px\}/, 'narrow gap is 5px');
   assert.match(narrow, /\.cell\{padding-left:2px;padding-right:2px/, 'narrow cell padding is 2px');
   assert.match(narrow, /\.bingo-page \.wrap\{padding-left:10px/, 'narrow wrap padding is 10px');
@@ -236,6 +238,37 @@ test('every label fits a four-column square at a 360 pixel viewport', () => {
       if (used && used + width > textWidth) { lines++; used = width; } else { used += width; }
     }
     assert.ok(lines <= 4, `"${label}" needs ${lines} lines`);
+  }
+});
+
+test('the five-column card is tighter, and admits it by letting long words break', () => {
+  const page = boot();
+  const labels = [...page.read('WILDLIFE'), ...page.read('TOGETHER'), page.read('FREE_CELL')].map(cell => cell.label);
+  const narrow = css.match(/@media\(max-width:380px\)\{([\s\S]*?)\n\}/)[1];
+  assert.match(narrow, /\.grid-5\{gap:4px\}/, 'narrow five-column gap is 4px');
+  assert.match(narrow, /\.grid-5 \.cell\{padding-left:1px;padding-right:1px/, 'and its padding is 1px');
+  // Five squares of prose across a 360px phone cannot keep every word whole, so the
+  // stylesheet says plainly that a word may break rather than run off the edge.
+  assert.match(css, /\.grid-5 \.cell\{[^}]*overflow-wrap:anywhere/,
+    'the big card must allow a long word to break');
+  assert.match(css, /\.grid-5 \.cell\{[^}]*font-size:clamp\(9\.5px,/, 'and step the type down');
+
+  const wrapInner = 360 - 10 * 2;
+  const cardInner = wrapInner - 2 * 2 - 8 * 2;
+  const column = (cardInner - 4 * 4) / 5;         // four 4px gaps between five columns
+  const textWidth = column - 2 * 2 - 1 * 2;       // .cell border, and 1px padding each side
+  const fontSize = 9.5;                           // clamp(9.5px, 2.5vw, 12px) bottoms out here
+  assert.ok(textWidth > 48, `only ${textWidth}px of text per square`);
+
+  for (const label of labels) {
+    // A word too wide is allowed to break, so the budget here is lines, not words.
+    let lines = 1;
+    let used = 0;
+    for (const word of label.split(/\s+/)) {
+      const width = (word.length + 1) * 0.58 * fontSize;
+      if (used && used + width > textWidth) { lines++; used = width; } else { used += width; }
+    }
+    assert.ok(lines <= 5, `"${label}" needs ${lines} lines on the big card`);
   }
 });
 
@@ -363,7 +396,7 @@ test('mark and undo preserve focus, announce changes and keep the free square ma
 });
 
 test('all four rows, four columns and both diagonals are detected independently', () => {
-  const lines = boot().read('LINES');
+  const lines = boot().read('linesOf(4)');
   for (const [index, line] of lines.entries()) {
     const page = boot({ search: '?who=Ace' });
     for (const i of line) if (i !== FREE) page.run(`toggle(${i})`);
@@ -549,7 +582,7 @@ test('a blocked (not full) browser is reported differently, and bad input is ref
   page.run('localStorage.setItem = () => { throw Error("Denied"); }');
   assert.deepEqual(page.read(`setPhoto('Ace', 1, ${JSON.stringify(jpeg())})`), { ok: false, reason: 'blocked' });
   const clean = boot({ search: '?who=Ace' });
-  for (const call of ["setPhoto('ZZ', 1, P)", "setPhoto('Ace', -1, P)", "setPhoto('Ace', 16, P)",
+  for (const call of ["setPhoto('ZZ', 1, P)", "setPhoto('Ace', -1, P)", "setPhoto('Ace', 25, P)",
     "setPhoto('Ace', 1.5, P)", "setPhoto('Ace', 1, 'javascript:alert(1)')", "removePhoto('ZZ', 1)",
     "removePhoto('Ace', 99)", "clearPhotos('ZZ')"]) {
     assert.deepEqual(clean.read(call.replace(/\bP\b/, JSON.stringify(jpeg()))), { ok: false, reason: 'bad' }, call);
@@ -668,8 +701,11 @@ test('an empty and a finished card both get a warm, uncompetitive line', () => {
   for (const word of ['lose', 'loser', 'failed', 'score:', 'poor']) {
     assert.equal(empty.app.innerHTML.toLowerCase().includes(word), false, word);
   }
-  const messages = ['warmLine(15, 0)', 'warmLine(12, 2)', 'warmLine(6, 0)', 'warmLine(1, 0)',
-    'warmLine(0, 1)', 'warmLine(0, 0)'].map(call => empty.read(call));
+  const messages = ['warmLine(15, 0, 15)', 'warmLine(12, 2, 15)', 'warmLine(6, 0, 15)', 'warmLine(1, 0, 15)',
+    'warmLine(0, 1, 15)', 'warmLine(0, 0, 15)'].map(call => empty.read(call));
+  // A big card only calls itself whole when all twenty-four are there.
+  assert.notEqual(empty.read('warmLine(15, 0, 24)'), empty.read('warmLine(15, 0, 15)'));
+  assert.match(empty.read('warmLine(24, 0, 24)'), /A whole card/);
   assert.equal(new Set(messages).size, messages.length);
   assert.ok(messages.every(message => message.length > 20));
 });
@@ -710,7 +746,7 @@ test('the contact sheet lays out one photo through sixteen without breaking', ()
     "sheetLayout('lots')", 'sheetLayout(null)']) {
     assert.equal(page.read(nothing), null, nothing);
   }
-  assert.equal(page.read('sheetLayout(99).frames.length'), CELLS, 'a card only ever holds sixteen');
+  assert.equal(page.read('sheetLayout(99).frames.length'), 25, 'a card never holds more than twenty-five');
 
   for (let count = 1; count <= CELLS; count++) {
     const layout = page.read(`sheetLayout(${count})`);
@@ -981,7 +1017,7 @@ test('a backup file holds one player’s card, marks and photos, and nothing els
     start('Bee'); toggle(3); setPhoto('Bee', 3, ${JSON.stringify(theirs)}); start('Ace')`);
   const backup = page.read("backupOf('Ace')");
   assert.equal(backup.app, 'ns-bingo');
-  assert.equal(backup.version, 2);
+  assert.equal(backup.version, 3);
   assert.equal(backup.who, 'Ace');
   assert.match(backup.savedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(backup.card.who, 'Ace');
@@ -990,6 +1026,7 @@ test('a backup file holds one player’s card, marks and photos, and nothing els
   assert.deepEqual(backup.card.celebrated, []);
   assert.ok(backup.card.started > 0, 'the night the card began travels with it');
   assert.ok(backup.card.night > 20000000, 'and the night it was dealt from');
+  assert.equal(backup.card.size, 4, 'and how big it is');
   assert.equal(backup.card.at.length, CELLS);
   assert.ok(backup.card.at[0] > 0 && backup.card.at[1] > 0, 'the times travel with the marks');
   assert.equal(backup.card.at[2], null, 'an unticked square has no time');
@@ -1011,7 +1048,7 @@ test('a backup file holds one player’s card, marks and photos, and nothing els
 
 test('a restore file is checked strictly and refused kindly, one reason at a time', () => {
   const page = boot({ search: '?who=Ace' });
-  const good = () => ({ app: 'ns-bingo', version: 2, savedAt: '2026-09-03T12:00:00.000Z', who: 'Ace',
+  const good = () => ({ app: 'ns-bingo', version: 3, savedAt: '2026-09-03T12:00:00.000Z', who: 'Ace',
     card: fullCard('Ace'), photos: { 3: jpeg(20) } });
   const check = value => page.read(`validBackup(${JSON.stringify(value)})`);
   const twist = change => { const value = good(); change(value); return value; };
@@ -1023,7 +1060,7 @@ test('a restore file is checked strictly and refused kindly, one reason at a tim
     ['shape', twist(value => { value.version = '1'; })],
     ['shape', twist(value => { value.version = 1.5; })],
     ['shape', twist(value => { delete value.version; })],
-    ['version', twist(value => { value.version = 3; })],       // a file from a newer card
+    ['version', twist(value => { value.version = 4; })],       // a file from a newer card
     ['version', twist(value => { value.version = 99; })],
     ['version', twist(value => { value.version = 0; })],
     ['player', twist(value => { value.who = 'Bob'; })],
@@ -1391,7 +1428,7 @@ test('six squares land on both phones, and the other nine belong to one', () => 
   // Nine of each card are its own draw, so the two boards are not the same board.
   assert.notDeepEqual(cards[0].map(cell => cell.label), cards[1].map(cell => cell.label));
   assert.match(page.app.innerHTML, /squares marked “both” are on Ace’s card as well/);
-  assert.match(page.app.innerHTML, /The other nine are yours alone/);
+  assert.match(page.app.innerHTML, /The other 9 are yours alone/);
   assert.equal((page.app.innerHTML.match(/class="cell-shared"/g) || []).length, 6, 'and they say so');
 });
 
@@ -1416,7 +1453,7 @@ test('a card dealt before any of this was shared simply has no six', () => {
   const older = fullCard('Ace');                   // no `shared` flags anywhere
   const page = boot({ stored: new Map([[KEY, JSON.stringify({ version: 3, active: 'Ace', cards: { Ace: older } })]]) });
   assert.equal(page.read('book.cards.Ace.cells').filter(cell => cell.shared === true).length, 0);
-  assert.match(page.app.innerHTML, /all fifteen are its own/);
+  assert.match(page.app.innerHTML, /every square is its own/);
   assert.equal(page.app.innerHTML.includes('cell-shared'), false);
 });
 
@@ -1656,4 +1693,206 @@ test('every night for a year deals a whole card, with six of it shared', () => {
   }
   // Not the same six night after night, and not a tiny handful of repeats either.
   assert.ok(sixes.size > 350, `only ${sixes.size} different sixes in 400 nights`);
+});
+
+/* ---------- room for more ---------- */
+
+// Everything the card is holding, keyed by the square's own label rather than by
+// its index, so a card that has changed shape can still be compared to itself.
+function holdings(page, who = 'Ace') {
+  const card = page.read(`book.cards.${who}`);
+  const held = {};
+  card.cells.forEach((cell, i) => {
+    held[cell.label] = { on: card.on[i], at: card.at[i],
+      photo: page.read(`photoOf('${who}', ${i}) || null`),
+      row: Math.floor(i / card.size), column: i % card.size,
+      shared: cell.shared === true, kind: cell.kind };
+  });
+  return held;
+}
+
+// A card with a bit of an evening on it: marks, photos and times, spread about.
+function playedCard(page, who = 'Ace') {
+  page.run(`[0, 1, 3, 4, 9, 12, 15].forEach(toggle)`);
+  for (const i of [0, 3, 9, 15]) page.run(`setPhoto('${who}', ${i}, ${JSON.stringify(jpeg(28 + i))})`);
+  page.run('render()');
+  return holdings(page, who);
+}
+
+test('growing the card keeps every mark, photo and time exactly where it was', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  const before = playedCard(page);
+  assert.equal(Object.keys(before).length, CELLS);
+  assert.equal(page.read("photoCount('Ace')"), 4);
+
+  page.click({ action: 'grow' });
+  assert.equal(page.read('book.cards.Ace.size'), 5);
+  assert.equal(page.read('book.cards.Ace.cells').length, 25);
+
+  const after = holdings(page);
+  for (const [label, was] of Object.entries(before)) {
+    const now = after[label];
+    assert.ok(now, `"${label}" fell off the card`);
+    assert.equal(now.on, was.on, `"${label}" changed its mark`);
+    assert.equal(now.at, was.at, `"${label}" lost the time it happened`);
+    assert.equal(now.photo, was.photo, `"${label}" lost its photo`);
+    assert.equal(now.row, was.row, `"${label}" moved row`);
+    assert.equal(now.column, was.column, `"${label}" moved column`);
+    assert.equal(now.kind, was.kind);
+  }
+  // Nothing was quietly dropped on the way, and nothing was quietly duplicated.
+  assert.equal(page.read("photoCount('Ace')"), 4, 'all four photos came along');
+  assert.equal(page.read('getProgress(book.cards.Ace).count'), 7, 'and all seven marks');
+  const labels = page.read('book.cards.Ace.cells').map(cell => cell.label);
+  assert.equal(new Set(labels).size, 25, 'no square appears twice');
+  assert.match(page.app.innerHTML, /Your 16 squares are all still here/);
+});
+
+test('the nine that join are empty, and three of them are the night’s own', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  const before = playedCard(page);
+  page.click({ action: 'grow' });
+
+  const card = page.read('book.cards.Ace');
+  const fresh = card.cells.map((cell, i) => ({ cell, i })).filter(({ cell }) => !before[cell.label]);
+  assert.equal(fresh.length, 9);
+  for (const { cell, i } of fresh) {
+    assert.equal(card.on[i], false, `${cell.label} arrived already marked`);
+    assert.equal(card.at[i], null, `${cell.label} arrived with a time`);
+    assert.equal(page.read(`photoOf('Ace', ${i}) || null`), null, `${cell.label} arrived with a photo`);
+  }
+  // Six shared to begin with, nine once the card is big.
+  assert.equal(Object.values(before).filter(held => held.shared).length, 6);
+  assert.equal(card.cells.filter(cell => cell.shared === true).length, 9);
+  assert.equal(card.cells.filter(cell => cell.kind === 'wildlife').length, 16);
+  assert.equal(card.cells.filter(cell => cell.kind === 'together').length, 8);
+  assert.match(page.app.innerHTML, /The 9 squares marked “both”/);
+  assert.match(page.app.innerHTML, /The other 15 are yours alone/);
+});
+
+test('both phones grow into the same nine shared squares', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  page.run("start('Bee', true)");
+  page.click({ action: 'grow' });
+  page.run("start('Ace', true)");
+  page.click({ action: 'grow' });
+  const nine = who => page.read(`book.cards.${who}.cells`)
+    .filter(cell => cell.shared === true).map(cell => cell.label).sort();
+  assert.equal(nine('Ace').length, 9);
+  assert.deepEqual(nine('Ace'), nine('Bee'), 'the same nine on both cards');
+});
+
+test('the free square rides along, still in the middle of a bigger grid', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  page.run(`setPhoto('Ace', ${FREE}, ${JSON.stringify(jpeg(20))})`);
+  page.click({ action: 'grow' });
+  const card = page.read('book.cards.Ace');
+  assert.equal(page.read('freeOf(5)'), 6);
+  assert.equal(card.cells[6].label, 'Here with you');
+  assert.equal(card.on[6], true);
+  assert.ok(card.at[6] > 0);
+  assert.ok(page.read("photoOf('Ace', 6) || null"), 'the free square keeps its photo too');
+  assert.ok(page.read('linesOf(5)').slice(-2).some(line => line.includes(6)),
+    'and is still on a diagonal');
+  assert.equal(page.read('linesOf(5)').length, 12, '5 rows + 5 columns + 2 diagonals');
+});
+
+test('a card that will not save leaves everything exactly as it was', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  const before = playedCard(page);
+  page.run('localStorage.setItem = () => { throw Error("Denied"); }');
+  page.click({ action: 'grow' });
+  assert.equal(page.read('book.cards.Ace.size'), 4, 'still the small card');
+  assert.deepEqual(holdings(page), before, 'and holding exactly what it held');
+  assert.match(page.read('notice'), /the card is exactly as it was/);
+});
+
+test('growing touches one player’s card and leaves the other alone', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  page.run(`start('Bee'); toggle(2); setPhoto('Bee', 2, ${JSON.stringify(jpeg(22))}); start('Ace')`);
+  const theirs = holdings(page, 'Bee');
+  page.click({ action: 'grow' });
+  assert.equal(page.read('book.cards.Ace.size'), 5);
+  assert.equal(page.read('book.cards.Bee.size'), 4, 'the other card is untouched');
+  assert.deepEqual(holdings(page, 'Bee'), theirs);
+});
+
+test('declining the bigger card changes nothing', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: false });
+  const before = playedCard(page);
+  page.click({ action: 'grow' });
+  assert.equal(page.read('book.cards.Ace.size'), 4);
+  assert.deepEqual(holdings(page), before);
+  assert.match(page.confirmations.at(-1), /Your 16 squares stay exactly where they are/);
+  assert.match(page.confirmations.at(-1), /no going back/);
+});
+
+test('the big card is the end of the road, and offers no way back', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  assert.match(page.app.innerHTML, /data-action="grow"/);
+  page.click({ action: 'grow' });
+  assert.equal(page.app.innerHTML.includes('data-action="grow"'), false, 'no button once it is big');
+  assert.equal(page.read('growCard(book.cards.Ace)'), null, 'and nothing left to grow into');
+  assert.match(page.app.innerHTML, /5 by 5 bingo card/);
+  assert.match(page.app.innerHTML, /5 in a row, across, down or diagonally/);
+  assert.match(page.app.innerHTML, /\/ 24 little moments/);
+  // A fresh card comes back the size you were playing, not back to small.
+  page.click({ action: 'reset' });
+  assert.equal(page.read('book.cards.Ace.size'), 5);
+});
+
+test('a bigger card reloads, backs up and restores as itself', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  page.click({ action: 'grow' });
+  page.run('toggle(20); toggle(24)');
+  const backup = page.read("backupOf('Ace')");
+  assert.equal(backup.version, 3);
+  assert.equal(backup.card.size, 5);
+  assert.equal(backup.card.cells.length, 25);
+
+  const back = page.read(`validBackup(${JSON.stringify(backup)})`);
+  assert.equal(back.ok, true);
+  assert.deepEqual(back.card, page.read('book.cards.Ace'), 'a round trip, exactly');
+
+  // And it survives being closed and opened again.
+  const again = boot({ search: '?who=Ace', stored: page.stored });
+  assert.equal(again.read('book.cards.Ace.size'), 5);
+  assert.deepEqual(again.read('book.cards.Ace'), page.read('book.cards.Ace'));
+  assert.match(again.app.innerHTML, /5 by 5 bingo card/);
+});
+
+test('lines are worked out afresh, so a four in a row is no longer a whole one', () => {
+  const page = boot({ search: '?who=Ace', confirmResult: true });
+  page.run('[0, 1, 2, 3].forEach(toggle)');            // a complete row on the small card
+  assert.equal(page.read('getProgress(book.cards.Ace).wins.length'), 1);
+  page.click({ action: 'grow' });
+  assert.equal(page.read('getProgress(book.cards.Ace).wins.length'), 0, 'the row got longer');
+  assert.deepEqual(page.read('book.cards.Ace.celebrated'), [], 'and nothing is owed a celebration');
+  assert.deepEqual(page.read('book.cards.Ace.on').slice(0, 4), [true, true, true, true],
+    'though the four squares are still marked');
+  // Finishing the longer row celebrates once, and only once.
+  page.run('toggle(4)');
+  assert.equal(page.read('getProgress(book.cards.Ace).wins.length'), 1);
+  assert.match(page.announcement.textContent, /Bingo!/);
+});
+
+test('every night grows into a whole card, twice over', () => {
+  const page = boot();
+  const start = Date.UTC(2026, 0, 1, 20, 0);
+  for (let day = 0; day < 200; day++) {
+    const when = start + day * 86400000;
+    const small = page.read(`newCard('Ace', ${when})`);
+    const grown = page.read(`growCard(${JSON.stringify(small)})`);
+    const where = `night ${day}`;
+    assert.ok(grown, `${where}: would not grow`);
+    assert.equal(grown.card.cells.length, 25, where);
+    assert.equal(new Set(grown.card.cells.map(cell => cell.label)).size, 25, `${where}: a repeat`);
+    assert.equal(grown.card.cells.filter(cell => cell.kind === 'wildlife').length, 16, where);
+    assert.equal(grown.card.cells.filter(cell => cell.kind === 'together').length, 8, where);
+    assert.equal(grown.card.cells.filter(cell => cell.shared === true).length, 9, where);
+    // Dealt big from the start, or grown into it, comes to the same nine.
+    const big = page.read(`newCard('Ace', ${when}, 5)`);
+    const nine = card => card.cells.filter(cell => cell.shared === true).map(cell => cell.label).sort().join('|');
+    assert.equal(nine(grown.card), nine(big), `${where}: grown and dealt disagree`);
+  }
 });

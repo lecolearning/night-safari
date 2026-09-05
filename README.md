@@ -38,12 +38,46 @@ files after adding art, resize scenes to 1100px wide and portraits to 720px squa
 then save as WebP at quality 88 to 90. Prompts for generating more art are in
 `PROMPTS.md`.
 
+## Two sizes
+
+A card starts **4 × 4**: sixteen squares, fifteen to fill. If the night is going well,
+one button on the board makes it **5 × 5** — twenty-five squares, twenty-four to fill.
+
+**Growing keeps everything.** The sixteen squares already on the card stay on the card,
+in the same row and the same column, with their marks, their photos and the times they
+happened. The card gains a row along the bottom and a column down the right, so only the
+stride between rows changes and every index shifts with it (`grownIndex`); photos are
+re-keyed to match. The write is all-or-nothing, like a restore: if the phone refuses,
+the card goes back exactly as it was.
+
+Nine new squares fill in around them. Three come from the night — see below — and six
+are this phone's own. Lines get longer, so finished lines are worked out afresh: a
+four-in-a-row is no longer a whole line, and bingos start again. Growing is one way;
+there is no honest way to shrink a card without throwing nine squares, and whatever is
+on them, away. Each player chooses for their own card, and a fresh card comes back at
+whatever size you were playing.
+
+Everything about a card's shape comes from that one number, so both sizes run through
+exactly the same code: `cellsOf`, `freeOf`, `momentsOf`, `wildlifeOf`, `linesOf`. The
+free square is at row 2, column 2 either way, which is on the ↘ diagonal of both grids.
+A saved card's size is read from how many squares it has, so cards saved before any of
+this simply open as 4 × 4.
+
+Five squares of prose across a 360px phone is genuinely tight: the big card steps the
+type down to 9.5px and lets a long word break rather than spill. On a normal-width
+phone it has room to spare.
+
 ## Six squares in common
 
 **Six of the fifteen** — four wildlife, two little moments — are dealt from the date
 rather than from chance, so they land on both phones. They wear a dotted top edge and a
 small `both` in the corner, and they are the race. The other nine are each phone's own
 draw, so the card still feels like yours.
+
+A 5 × 5 shares **nine**: the same six plus three more. The small card's six are the first
+six of the big card's nine, drawn from the same seeded shuffle, so growing never disturbs
+a square that is already there. A small card also keeps clear of all nine from the start,
+so its own draw can never collide with the three it might want later.
 
 It needs no server, no signal and no pairing. The night rolls over at 4am, so a card
 started at 23:50 and one started at 00:10 still share their six. A card carried over

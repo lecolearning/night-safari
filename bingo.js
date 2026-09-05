@@ -5,17 +5,27 @@
 const NAMES = (typeof PEOPLE !== 'undefined' && Array.isArray(PEOPLE.players) && PEOPLE.players.length === 2)
   ? PEOPLE.players.slice()
   : ['One', 'Two'];
-const SIZE = 4;                          // four across, four down
-const CELLS = SIZE * SIZE;               // sixteen squares
-const FREE_INDEX = 5;                    // row 2, column 2 — sits on the ↘ diagonal
-const MOMENTS = CELLS - 1;               // fifteen to fill; the middle is already yours
-const WILDLIFE_PER_CARD = 10;
-const TOGETHER_PER_CARD = MOMENTS - WILDLIFE_PER_CARD;
-// Six of the fifteen are the same on both phones. Enough for a race and for
-// "you got that one too!", and few enough that most of the card is still yours.
-const SHARED_WILDLIFE = 4;
-const SHARED_TOGETHER = 2;
-const SHARED_PER_CARD = SHARED_WILDLIFE + SHARED_TOGETHER;
+/* A card is four across by default and can grow to five, once, if the night is
+   going well. Everything about its shape is worked out from that one number, so
+   both sizes go through exactly the same code. */
+const SMALL = 4;
+const BIG = 5;
+const SIZES = [SMALL, BIG];
+const MAX_CELLS = BIG * BIG;             // the most squares, or photos, a card can hold
+const cellsOf = size => size * size;
+const freeOf = size => size + 1;         // row 2, column 2 — on the ↘ diagonal either way
+const momentsOf = size => cellsOf(size) - 1;   // the middle is already yours
+// Two wildlife for every little moment: ten and five, or sixteen and eight.
+const wildlifeOf = size => Math.round(momentsOf(size) * 2 / 3);
+const togetherOf = size => momentsOf(size) - wildlifeOf(size);
+const sizeOfCells = count => SIZES.find(size => cellsOf(size) === count) || 0;
+
+// How many squares the night hands to both phones. Six on the small card; a bigger
+// one keeps those six and takes three more, so growing never disturbs what is there.
+const SHARED = {
+  [SMALL]: { wildlife: 4, together: 2 },
+  [BIG]: { wildlife: 6, together: 3 },
+};
 const LABEL_MAX = 32;                    // keeps every label on a narrow phone without ugly breaks
 const UNMARK_WINDOW = 6000;              // how long a square keeps asking before it lets it go
 const KEY = 'ns_bingo_v3';
@@ -102,15 +112,19 @@ const TOGETHER = [
   ['🎧', 'Hear the same night sound'],
 ].map(([icon, label]) => ({ icon, label, kind: 'together' }));
 
-// Four rows, four columns, both diagonals: ten lines.
-const LINES = (() => {
-  const span = [...Array(SIZE).keys()];
-  const lines = span.map(r => span.map(c => r * SIZE + c));
-  span.forEach(c => lines.push(span.map(r => r * SIZE + c)));
-  lines.push(span.map(i => i * SIZE + i));
-  lines.push(span.map(i => i * SIZE + (SIZE - 1 - i)));
-  return lines;
-})();
+// Every row, every column, both diagonals: ten lines across a four, twelve across a five.
+const LINE_CACHE = {};
+function linesOf(size) {
+  if (!LINE_CACHE[size]) {
+    const span = [...Array(size).keys()];
+    const lines = span.map(r => span.map(c => r * size + c));
+    span.forEach(c => lines.push(span.map(r => r * size + c)));
+    lines.push(span.map(i => i * size + i));
+    lines.push(span.map(i => i * size + (size - 1 - i)));
+    LINE_CACHE[size] = lines;
+  }
+  return LINE_CACHE[size];
+}
 
 const app = document.querySelector('#app');
 const announcement = document.querySelector('#bingo-announcement');
@@ -156,32 +170,98 @@ function seeded(seed) {
   };
 }
 
-function newCard(who, when = Date.now()) {
-  const night = nightOf(when);
+// What this night hands to both phones. The small card's six are the first six of the
+// big card's nine, drawn from the same seeded shuffle, so a card that grows keeps them.
+function nightDeal(night, size) {
   const pick = seeded(night);
-  // The six: the night decides, the same way on both phones.
-  const both = [
-    ...shuffle(WILDLIFE, pick).slice(0, SHARED_WILDLIFE),
-    ...shuffle(TOGETHER, pick).slice(0, SHARED_TOGETHER),
-  ].map(cell => ({ ...cell, shared: true }));
-  // The other nine: this phone's own, drawn from whatever the six left behind.
-  const taken = new Set(both.map(cell => cell.label));
-  const spare = list => shuffle(list.filter(cell => !taken.has(cell.label)));
+  const wild = shuffle(WILDLIFE, pick);
+  const pair = shuffle(TOGETHER, pick);
+  const want = SHARED[size] || SHARED[SMALL];
+  return { wildlife: wild.slice(0, want.wildlife), together: pair.slice(0, want.together) };
+}
+const sharedCells = deal => [...deal.wildlife, ...deal.together].map(cell => ({ ...cell, shared: true }));
+
+function newCard(who, when = Date.now(), size = SMALL) {
+  const night = nightOf(when);
+  const both = sharedCells(nightDeal(night, size));
+  // A small card still keeps clear of every square a bigger one would want, so that
+  // growing later can add the night's other three without ever repeating one.
+  const reserved = new Set(sharedCells(nightDeal(night, BIG)).map(cell => cell.label));
+  const spare = list => shuffle(list.filter(cell => !reserved.has(cell.label)));
   const mine = [
-    ...spare(WILDLIFE).slice(0, WILDLIFE_PER_CARD - SHARED_WILDLIFE),
-    ...spare(TOGETHER).slice(0, TOGETHER_PER_CARD - SHARED_TOGETHER),
+    ...spare(WILDLIFE).slice(0, wildlifeOf(size) - both.filter(cell => cell.kind === 'wildlife').length),
+    ...spare(TOGETHER).slice(0, togetherOf(size) - both.filter(cell => cell.kind === 'together').length),
   ].map(cell => ({ ...cell }));
   // Where they all land: ordinary chance, so the two boards never look alike.
   const cells = shuffle(both.concat(mine));
-  cells.splice(FREE_INDEX, 0, { ...FREE_CELL });
+  const free = freeOf(size);
+  cells.splice(free, 0, { ...FREE_CELL });
   const at = cells.map(() => null);
-  at[FREE_INDEX] = when;                 // turning up together is the first thing that happened
-  return { who, night, cells, on: cells.map((_, i) => i === FREE_INDEX), at, celebrated: [], started: when };
+  at[free] = when;                       // turning up together is the first thing that happened
+  return { who, size, night, cells, on: cells.map((_, i) => i === free), at, celebrated: [], started: when };
+}
+
+/* ---------- growing a card ----------
+   A four across becomes a five across by gaining a row along the bottom and a
+   column down the right. Every square already on the card keeps its row and its
+   column, so nothing moves on screen; only the stride between rows changes, and
+   every index shifts with it. Marks, times and photos follow their squares. */
+function grownIndex(i, from, to) { return Math.floor(i / from) * to + (i % from); }
+
+// Returns the bigger card and where each old square went, or null if it could not
+// be built. Nothing here touches storage; the caller decides whether to keep it.
+function growCard(card, to = BIG) {
+  const from = card.size;
+  if (!SIZES.includes(to) || to <= from) return null;
+  const room = cellsOf(to);
+  const cells = new Array(room).fill(null);
+  const on = new Array(room).fill(false);
+  const at = new Array(room).fill(null);
+  const moved = new Map();
+  card.cells.forEach((cell, i) => {
+    const j = grownIndex(i, from, to);
+    moved.set(i, j);
+    cells[j] = cell;
+    on[j] = card.on[i];
+    at[j] = card.at[i];
+  });
+
+  const have = new Set(card.cells.map(cell => cell.label));
+  // The squares this night set aside for a bigger card. Anything already here is
+  // skipped rather than repeated, and the phone's own draw makes up the difference.
+  const extra = sharedCells(nightDeal(card.night, to)).filter(cell => !have.has(cell.label));
+  extra.forEach(cell => have.add(cell.label));
+  const counted = kind => cells.filter(cell => cell && cell.kind === kind).length
+    + extra.filter(cell => cell.kind === kind).length;
+  const spare = list => shuffle(list.filter(cell => !have.has(cell.label)));
+  const mine = [
+    ...spare(WILDLIFE).slice(0, Math.max(0, wildlifeOf(to) - counted('wildlife'))),
+    ...spare(TOGETHER).slice(0, Math.max(0, togetherOf(to) - counted('together'))),
+  ].map(cell => ({ ...cell }));
+
+  const fresh = shuffle(extra.concat(mine));
+  let next = 0;
+  for (let i = 0; i < room; i++) if (!cells[i]) cells[i] = fresh[next++] || null;
+  const free = freeOf(to);
+  cells[free] = { ...FREE_CELL };
+  on[free] = true;
+  if (!at[free]) at[free] = card.started;
+  if (cells.some(cell => !cell)) return null;          // never hand back a half-built card
+
+  // The lines are longer now, so which of them are finished is worked out afresh
+  // rather than carried over; a four-in-a-row is no longer a whole line.
+  const celebrated = linesOf(to).reduce((done, line, k) =>
+    (line.every(i => on[i]) ? done.concat(k) : done), []);
+  return { card: { who: card.who, size: to, night: card.night, cells, on, at, celebrated,
+    started: card.started }, moved };
 }
 
 function validCard(value, who) {
-  if (!value || value.who !== who || !Array.isArray(value.cells) || value.cells.length !== CELLS ||
-      !Array.isArray(value.on) || value.on.length !== CELLS || value.on.some(on => typeof on !== 'boolean')) return null;
+  if (!value || value.who !== who || !Array.isArray(value.cells)) return null;
+  // The number of squares is the size. Nothing else is trusted to agree with it.
+  const size = sizeOfCells(value.cells.length);
+  if (!size || !Array.isArray(value.on) || value.on.length !== cellsOf(size) ||
+      value.on.some(on => typeof on !== 'boolean')) return null;
   const cells = value.cells.map(cell => {
     if (!cell || typeof cell.icon !== 'string' || cell.icon.length > 16 ||
         typeof cell.label !== 'string' || !cell.label.trim() || cell.label.length > LABEL_MAX) return null;
@@ -193,11 +273,12 @@ function validCard(value, who) {
       ...(cell.shared === true ? { shared: true } : {}) };
   });
   if (cells.some(cell => !cell)) return null;
-  cells[FREE_INDEX] = { ...FREE_CELL };
+  const free = freeOf(size);
+  cells[free] = { ...FREE_CELL };
   const on = value.on.slice();
-  on[FREE_INDEX] = true;
+  on[free] = true;
   const celebrated = Array.isArray(value.celebrated) ? [...new Set(value.celebrated.filter(i =>
-    Number.isInteger(i) && i >= 0 && i < LINES.length))] : [];
+    Number.isInteger(i) && i >= 0 && i < linesOf(size).length))] : [];
   // The night this card began, so a keepsake can be dated. An older save simply starts from today.
   const started = Number.isFinite(value.started) && value.started > 0 ? Math.floor(value.started) : Date.now();
   const night = Number.isFinite(value.night) && value.night > 0 ? Math.floor(value.night) : nightOf(started);
@@ -208,8 +289,8 @@ function validCard(value, who) {
     const when = stamps[i];
     return on[i] && Number.isFinite(when) && when > 0 ? Math.floor(when) : null;
   });
-  if (!at[FREE_INDEX]) at[FREE_INDEX] = started;
-  return { who, night, cells, on, at, celebrated, started };
+  if (!at[free]) at[free] = started;
+  return { who, size, night, cells, on, at, celebrated, started };
 }
 function readJSON(key) {
   let raw;
@@ -289,7 +370,7 @@ function loadAlbum() {
     for (const who of NAMES) {
       const kept = saved.photos[who];
       if (!kept || typeof kept !== 'object') continue;
-      for (let i = 0; i < CELLS; i++) if (validPhoto(kept[i])) photos[who][i] = kept[i];
+      for (let i = 0; i < MAX_CELLS; i++) if (validPhoto(kept[i])) photos[who][i] = kept[i];
     }
   }
   return { version: 1, photos };
@@ -306,7 +387,7 @@ function photoCount(who) {
 }
 // Writes the album, and puts it straight back if the phone says no. The board is never touched.
 function setPhoto(who, index, dataURL) {
-  if (!NAMES.includes(who) || !Number.isInteger(index) || index < 0 || index >= CELLS) return { ok: false, reason: 'bad' };
+  if (!NAMES.includes(who) || !Number.isInteger(index) || index < 0 || index >= MAX_CELLS) return { ok: false, reason: 'bad' };
   if (!validPhoto(dataURL)) return { ok: false, reason: 'bad' };
   const previous = album.photos[who][index];
   album.photos[who][index] = dataURL;
@@ -318,7 +399,7 @@ function setPhoto(who, index, dataURL) {
   return result;
 }
 function removePhoto(who, index) {
-  if (!NAMES.includes(who) || !Number.isInteger(index) || index < 0 || index >= CELLS) return { ok: false, reason: 'bad' };
+  if (!NAMES.includes(who) || !Number.isInteger(index) || index < 0 || index >= MAX_CELLS) return { ok: false, reason: 'bad' };
   if (album.photos[who][index] === undefined) return { ok: true };
   delete album.photos[who][index];       // removing frees room, so we keep it even if the write fails
   return saveAlbum();
@@ -394,9 +475,9 @@ function sheetLabelMax(cellWidth) {
 function tiltAt(index) {
   return (index % 2 ? 1 : -1) * SHEET_TILT * (1 + (index % 3) * 0.15);
 }
-// Where every polaroid sits. One photo through sixteen, always inside the page.
+// Where every polaroid sits. One photo through twenty-five, always inside the page.
 function sheetLayout(count) {
-  const total = Math.min(Math.max(Math.floor(Number(count)) || 0, 0), CELLS);
+  const total = Math.min(Math.max(Math.floor(Number(count)) || 0, 0), MAX_CELLS);
   if (total < 1) return null;
   const cols = Math.min(SHEET_COLS_MAX, Math.ceil(Math.sqrt(total)));
   const rows = Math.ceil(total / cols);
@@ -555,7 +636,7 @@ function composeSheet(who) {
   const card = book.cards[who];
   if (!card) return Promise.resolve(null);
   const wanted = [];
-  for (let i = 0; i < CELLS; i++) {
+  for (let i = 0; i < cellsOf(card.size); i++) {
     const photo = photoOf(who, i);
     if (photo) wanted.push({ index: i, label: card.cells[i].label, at: card.at[i], photo });
   }
@@ -649,9 +730,9 @@ function deliverImage(blob, filename, words) {
 
 /* ---------- a backup you can hold ---------- */
 const BACKUP_TAG = 'ns-bingo';
-const BACKUP_VERSION = 2;
+const BACKUP_VERSION = 3;
 // Version 1 files predate the clock. validCard fills the gaps, so they still restore.
-const BACKUP_READS = [1, 2];
+const BACKUP_READS = [1, 2, 3];
 const BACKUP_TROUBLE = {
   unreadable: 'That file wouldn’t open, so nothing has changed.',
   shape: 'That isn’t one of our backup files, so nothing has changed.',
@@ -673,7 +754,7 @@ function backupOf(who) {
     who,
     card: { who, cells: card.cells.map(cell => ({ ...cell })), on: card.on.slice(),
       at: card.at.slice(), celebrated: card.celebrated.slice(),
-      started: card.started, night: card.night },
+      started: card.started, night: card.night, size: card.size },
     photos,
   };
 }
@@ -694,7 +775,7 @@ function validBackup(value) {
   for (const [key, photo] of Object.entries(kept || {})) {
     const index = /^\d+$/.test(key) ? Number(key) : -1;
     // A single unreadable photo is dropped; the rest of the evening still comes home.
-    if (index >= 0 && index < CELLS && validPhoto(photo)) photos[index] = photo;
+    if (index >= 0 && index < MAX_CELLS && validPhoto(photo)) photos[index] = photo;
     else skipped++;
   }
   return { ok: true, who: value.who, card, photos, skipped,
@@ -821,12 +902,13 @@ function start(who, focus = false) {
   render();
   if (focus) {
     app.querySelector('#bingo-heading').focus({ preventScroll: true });
-    announce(`${who}'s card ${resuming ? 'resumed' : 'ready'}. ${state.on.filter(Boolean).length - 1} of ${MOMENTS} moments marked.`);
+    announce(`${who}'s card ${resuming ? 'resumed' : 'ready'}. ${state.on.filter(Boolean).length - 1} of ${momentsOf(state.size)} moments marked.`);
   }
 }
 function getProgress(card) {
-  const wins = LINES.filter(line => line.every(i => card.on[i]));
-  const remaining = Math.min(...LINES.map(line => line.filter(i => !card.on[i]).length));
+  const lines = linesOf(card.size);
+  const wins = lines.filter(line => line.every(i => card.on[i]));
+  const remaining = Math.min(...lines.map(line => line.filter(i => !card.on[i]).length));
   return { wins, remaining, count: card.on.filter(Boolean).length - 1 };
 }
 // The honest line about where photos live. Said once per screen, never twice.
@@ -835,8 +917,8 @@ function photoTruth(count) {
   const many = `${count} ${count === 1 ? 'photo' : 'photos'} tucked into this card, kept on this phone only.`;
   return storageOK ? `${many} Worth saving at the end of the night.` : many;
 }
-function warmLine(count, photos) {
-  if (count >= MOMENTS) return 'A whole card. Every square is a bit of tonight.';
+function warmLine(count, photos, moments) {
+  if (count >= moments) return 'A whole card. Every square is a bit of tonight.';
   if (count >= 10) return 'A night with plenty in it. Look at all that.';
   if (count >= 5) return 'A good handful of moments, safely kept.';
   if (count >= 1) return 'Even one little moment is worth keeping.';
@@ -845,9 +927,10 @@ function warmLine(count, photos) {
 
 function cellHTML(cell, i, winCells) {
   const photo = photoOf(state.who, i);
-  const free = i === FREE_INDEX;
+  const size = state.size;
+  const free = i === freeOf(size);
   const label = escapeHTML(cell.label);
-  const position = `Row ${Math.floor(i / SIZE) + 1}, column ${i % SIZE + 1}`;
+  const position = `Row ${Math.floor(i / size) + 1}, column ${i % size + 1}`;
   const asking = armed === i;
   const both = cell.shared === true;
   const classes = ['cell', state.on[i] && 'on', free && 'free', winCells.has(i) && 'win',
@@ -889,7 +972,7 @@ function lightboxHTML() {
 // clock, and photos on squares nobody ticked, keep their place on the board instead.
 function timeline(card, who) {
   return card.cells.map((cell, i) => ({ cell, i, at: card.at[i], photo: Boolean(photoOf(who, i)) }))
-    .filter(row => (card.on[row.i] && row.i !== FREE_INDEX) || row.photo)
+    .filter(row => (card.on[row.i] && row.i !== freeOf(card.size)) || row.photo)
     .sort((a, b) => (a.at && b.at ? a.at - b.at : a.at ? -1 : b.at ? 1 : a.i - b.i));
 }
 // The shape of the evening: card opened, last square ticked, and the gap between.
@@ -921,11 +1004,11 @@ function summaryHTML() {
     <div class="card bingo-card bingo-summary">
       <span class="tape" aria-hidden="true"></span>
       <div class="summary-figures">
-        <div class="summary-figure"><strong>${count}</strong><span>of ${MOMENTS} squares marked</span></div>
+        <div class="summary-figure"><strong>${count}</strong><span>of ${momentsOf(state.size)} squares marked</span></div>
         <div class="summary-figure"><strong>${photos}</strong><span>${photos === 1 ? 'photo kept' : 'photos kept'}</span></div>
         <div class="summary-figure"><strong>${wins.length}</strong><span>${wins.length === 1 ? 'line finished' : 'lines finished'}</span></div>
       </div>
-      <p class="summary-warm">${warmLine(count, photos)}</p>
+      <p class="summary-warm">${warmLine(count, photos, momentsOf(state.size))}</p>
       ${span ? `<p class="summary-span"><span aria-hidden="true">🕗</span> ${escapeHTML(span)}</p>` : ''}
       ${marked.length ? `<ol class="summary-list summary-timeline">${marked.map(({ cell, i, at, photo }) =>
         `<li>${at ? `<span class="summary-when">${escapeHTML(clockTime(at))}</span>`
@@ -969,9 +1052,10 @@ function keepsakeHTML(photos) {
 function sharedSetLine() {
   const other = NAMES.filter(who => who !== state.who)[0];
   const both = state.cells.filter(cell => cell.shared === true).length;
-  if (!both) return 'This card was dealt before the two cards had squares in common, so all fifteen are its own.';
+  const mine = momentsOf(state.size) - both;
+  if (!both) return 'This card was dealt before the two cards had squares in common, so every square is its own.';
   return state.night === nightOf(Date.now())
-    ? `The ${both} squares marked “both” are on ${other}’s card as well, so those are a race. The other nine are yours alone.`
+    ? `The ${both} squares marked “both” are on ${other}’s card as well, so those are a race. The other ${mine} are yours alone.`
     : `The ${both} “both” squares came from an earlier night, so they may not match ${other}’s card tonight. A fresh card would follow tonight’s.`;
 }
 
@@ -979,7 +1063,9 @@ function boardHTML() {
   const { wins, remaining, count } = getProgress(state);
   const winCells = new Set(wins.flat());
   const photos = photoCount(state.who);
-  const note = count === MOMENTS ? 'A whole card of memories. The best bit was doing it together.' :
+  const size = state.size;
+  const moments = momentsOf(size);
+  const note = count === moments ? 'A whole card of memories. The best bit was doing it together.' :
     wins.length ? 'A little victory! Dessert is still a team sport.' :
     remaining === 1 ? 'One little moment away from your first bingo.' :
     'No rush to fill the card. The lovely part is being here.';
@@ -992,14 +1078,14 @@ function boardHTML() {
       <div class="bingo-card-top"><h2>${state.who}’s little collection</h2>
         <div class="bingo-players" role="group" aria-label="Switch player; both cards are kept">${NAMES.map(who =>
           `<button type="button" data-player="${who}" aria-pressed="${who === state.who}" aria-label="${who}’s card">${who}</button>`).join('')}</div></div>
-      <p id="bingo-help" class="bingo-instructions">Tap a square to mark it. To take one off again, tap it twice — a stray tap in the dark costs nothing. Four across, down or diagonally makes a bingo. The little 📷 on each square adds a photo.</p>
+      <p id="bingo-help" class="bingo-instructions">Tap a square to mark it. To take one off again, tap it twice — a stray tap in the dark costs nothing. ${size} in a row, across, down or diagonally, makes a bingo. The little 📷 on each square adds a photo.</p>
       <div class="bingo-legend" aria-hidden="true"><span>🌿 Wildlife</span><span>💗 Us being us</span><span>💛 A free square</span><span>◆ On both cards</span></div>
       <p class="bingo-shared-note">${sharedSetLine()}</p>
       ${notice ? `<p class="bingo-notice" role="status">${escapeHTML(notice)}</p>` : ''}
-      <div class="grid" role="group" aria-label="${state.who}’s ${SIZE} by ${SIZE} bingo card" aria-describedby="bingo-help">${
+      <div class="grid grid-${size}" style="--across:${size}" role="group" aria-label="${state.who}’s ${size} by ${size} bingo card" aria-describedby="bingo-help">${
         state.cells.map((cell, i) => cellHTML(cell, i, winCells)).join('')}</div>
-      <div class="score"><span>${count} <span class="muted">/ ${MOMENTS} little moments</span></span><span>${wins.length ? '♡ ' + wins.length + ' bingo' + (wins.length > 1 ? 's' : '') : 'Room for memories'}</span></div>
-      <progress class="bingo-progress" max="${MOMENTS}" value="${count}" aria-label="${count} of ${MOMENTS} moments marked"></progress>
+      <div class="score"><span>${count} <span class="muted">/ ${moments} little moments</span></span><span>${wins.length ? '♡ ' + wins.length + ' bingo' + (wins.length > 1 ? 's' : '') : 'Room for memories'}</span></div>
+      <progress class="bingo-progress" max="${moments}" value="${count}" aria-label="${count} of ${moments} moments marked"></progress>
       <p class="bingo-note ${wins.length ? 'has-bingo' : ''}">${note}</p>
       <p class="bingo-album-note">${photoTruth(photos)}</p>
     </div>
@@ -1011,12 +1097,17 @@ function boardHTML() {
         <p>Photos are shrunk and kept on this phone alone. Nothing is uploaded, and nothing is shared unless you show someone. That also means clearing this browser takes them with it, so the end screen has a button that saves them all as one picture.</p>
         <p>Marking is one tap. Unmarking wants two, since a pocket or a dark path finds squares all by itself; the square says “tap again” while it is asking, and forgets the question after a few seconds.</p>
         <p>Ticking a wildlife square also fills that animal in on the field guide, on this phone. Unticking leaves it there — if it was a mistap, the card itself has a button to put it back.</p>
+        <p>${size < BIG
+          ? 'A four by four is the easy version. If the night is going well there is a bigger one, and taking it keeps every square you already have.'
+          : 'This is the big card. The sixteen you started with are still exactly where they were, marks, photos and times and all.'}</p>
         <p>Tick what happens naturally. A shy animal or an unfinished card doesn’t make the night any less lovely.</p>
         <p>Keep voices gentle, skip the flash, and follow the park’s signs. We’re guests in their home.</p>
       </details>
       <div class="bingo-supper"><span aria-hidden="true">🍨</span><p><strong>For the dessert debrief</strong><br>Favourite animal? Funniest moment? One tiny thing we want to remember?</p></div>
+      ${size < BIG ? `<button class="bingo-grow" data-action="grow">Room for more? Make it ${BIG} × ${BIG}
+        <small>Keeps all ${cellsOf(size)} squares exactly as they are, and adds ${cellsOf(BIG) - cellsOf(size)} more around them.</small></button>` : ''}
       <button class="bingo-reset" data-action="reset">Start a fresh ${state.who} card</button>
-      <p class="bingo-reset-note">Asks first. Only this player’s card and photos change.</p>
+      <p class="bingo-reset-note">Asks first. Only this player’s card and photos change.${size < BIG ? '' : ' A fresh card comes back the big size.'}</p>
     </div>
     ${lightbox === null ? '' : lightboxHTML()}
   </div>`;
@@ -1034,7 +1125,7 @@ function disarm() {
 }
 
 function toggle(i) {
-  if (!state || !Number.isInteger(i) || i < 0 || i >= CELLS || i === FREE_INDEX) return;
+  if (!state || !Number.isInteger(i) || i < 0 || i >= cellsOf(state.size) || i === freeOf(state.size)) return;
   // Ticking is one tap, because that is the thing you came here to do. Unticking asks
   // for a second one: a stray tap on a dark path should never quietly take a moment
   // off the card, and the time it happened with it.
@@ -1056,7 +1147,8 @@ function toggle(i) {
     return;
   }
   disarm();
-  const wasFull = getProgress(state).count === MOMENTS;
+  const moments = momentsOf(state.size);
+  const wasFull = getProgress(state).count === moments;
   state.on[i] = !state.on[i];
   state.at[i] = state.on[i] ? Date.now() : null;
   // A wildlife square just ticked is a sighting, and the field guide wants to know.
@@ -1064,7 +1156,7 @@ function toggle(i) {
   const how = state.on[i] && cell.kind === 'wildlife' && cell.art ? noteSighting(cell.art) : null;
   notice = how ? sightingWords(cell.art, how) + ' 📖' : null;
   const before = state.celebrated.length;
-  LINES.forEach((line, k) => {
+  linesOf(state.size).forEach((line, k) => {
     if (line.every(j => state.on[j]) && !state.celebrated.includes(k)) state.celebrated.push(k);
   });
   save();
@@ -1074,11 +1166,11 @@ function toggle(i) {
   if (state.on[i]) button.classList.add('just-marked');
   const { count, wins } = getProgress(state);
   const newBingo = state.celebrated.length > before;
-  const said = `${state.cells[i].label} ${state.on[i] ? 'marked' : 'unmarked'}. ${count} of ${MOMENTS} moments. ${how ? sightingWords(cell.art, how) + ' ' : ''}${newBingo ? 'Bingo! A little victory for ' + state.who + '. ' : ''}${wins.length} completed ${wins.length === 1 ? 'line' : 'lines'}.`;
+  const said = `${state.cells[i].label} ${state.on[i] ? 'marked' : 'unmarked'}. ${count} of ${moments} moments. ${how ? sightingWords(cell.art, how) + ' ' : ''}${newBingo ? 'Bingo! A little victory for ' + state.who + '. ' : ''}${wins.length} completed ${wins.length === 1 ? 'line' : 'lines'}.`;
   announce(said);
   if (newBingo) celebrate();
   // A full card gently turns itself into the little end screen.
-  if (count === MOMENTS && !wasFull) showSummary(said);
+  if (count === moments && !wasFull) showSummary(said);
 }
 function showSummary(lead = '') {
   if (!state) return;
@@ -1089,7 +1181,7 @@ function showSummary(lead = '') {
   app.querySelector('#bingo-heading').focus({ preventScroll: true });
   const { count } = getProgress(state);
   const photos = photoCount(state.who);
-  announce(`${lead ? lead + ' ' : ''}How our night went. ${count} of ${MOMENTS} squares marked, ${photos} ${photos === 1 ? 'photo' : 'photos'} kept.`);
+  announce(`${lead ? lead + ' ' : ''}How our night went. ${count} of ${momentsOf(state.size)} squares marked, ${photos} ${photos === 1 ? 'photo' : 'photos'} kept.`);
 }
 function showBoard() {
   if (!state) return;
@@ -1101,15 +1193,65 @@ function showBoard() {
 }
 function reset() {
   if (!state || !confirm(`Start a fresh card for ${state.who}? This clears only ${state.who}’s squares and photos. Tonight’s six shared squares stay; the other nine are drawn again. The other player’s card stays safe.`)) return;
+  const size = state.size;
   clearPhotos(state.who);
-  book.cards[state.who] = newCard(state.who);
+  book.cards[state.who] = newCard(state.who, Date.now(), size);
   start(state.who, true);
   announce(`Fresh card ready for ${state.who}. The other player’s card is unchanged.`);
 }
 
+/* ---------- taking the bigger card ---------- */
+// All of it or none of it, the same way a restore works: the photos are the bulky
+// write, so they go first, and if anything is refused the card goes back exactly
+// as it was. Growing is one way — there is no honest way to shrink a card without
+// throwing nine squares, and whatever is on them, away.
+function grow() {
+  if (!state || state.size >= BIG) return;
+  const who = state.who;
+  const from = state.size;
+  const grown = growCard(state);
+  if (!grown) {
+    notice = 'The bigger card wouldn’t come out right, so nothing has changed.';
+    render();
+    announce(notice);
+    return;
+  }
+  const added = cellsOf(BIG) - cellsOf(from);
+  if (!confirm(`Make ${who}’s card ${BIG} by ${BIG}? Your ${cellsOf(from)} squares stay exactly where they are, with their marks, photos and times. ${added} new ones fill in around them. Lines get longer, so bingos start again — and there is no going back to the small card.`)) return;
+
+  const beforeCard = book.cards[who];
+  const beforePhotos = album.photos[who];
+  const kept = beforePhotos || {};
+  const remapped = {};
+  for (const [key, photo] of Object.entries(kept)) {
+    const to = grown.moved.get(Number(key));
+    if (to !== undefined) remapped[to] = photo;
+  }
+  book.cards[who] = grown.card;
+  album.photos[who] = remapped;
+  const photoWrite = saveAlbum();
+  const cardWrite = photoWrite.ok ? save() : photoWrite;
+  if (!cardWrite.ok) {
+    book.cards[who] = beforeCard;
+    album.photos[who] = beforePhotos || {};
+    saveAlbum();                        // the old album fitted a moment ago
+    save();
+    notice = cardWrite.reason === 'full'
+      ? 'There isn’t room on this phone for a bigger card, so nothing has changed.'
+      : 'This browser won’t save right now, so the card is exactly as it was.';
+    render();
+    announce(notice);
+    return;
+  }
+  start(who, true);
+  notice = `${who}’s card is now ${BIG} by ${BIG}. Your ${cellsOf(from)} squares are all still here; ${added} new ones joined them.`;
+  render();
+  announce(notice);
+}
+
 /* ---------- photos ---------- */
 function pickPhoto(index) {
-  if (!state || !Number.isInteger(index) || index < 0 || index >= CELLS) return;
+  if (!state || !Number.isInteger(index) || index < 0 || index >= cellsOf(state.size)) return;
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
@@ -1268,7 +1410,7 @@ function takeBackup(text) {
   start(who, true);
   const skipped = done.skipped
     ? ` ${done.skipped} photo${done.skipped === 1 ? '' : 's'} in the file couldn’t be read.` : '';
-  notice = `${who}’s card is back: ${done.marked} of ${MOMENTS} squares and ${done.photos} ${done.photos === 1 ? 'photo' : 'photos'}.${skipped}`;
+  notice = `${who}’s card is back: ${done.marked} of ${momentsOf(book.cards[who].size)} squares and ${done.photos} ${done.photos === 1 ? 'photo' : 'photos'}.${skipped}`;
   render();
   announce(notice);
   return true;
@@ -1299,8 +1441,8 @@ function celebrate() {
   }
 }
 
-const ACTIONS = { reset, summary: showSummary, board: showBoard, 'close-photo': closePhoto, 'remove-photo': dropPhoto,
-  keepsake: saveKeepsake, backup: saveBackup, restore: pickRestore };
+const ACTIONS = { reset, grow, summary: showSummary, board: showBoard, 'close-photo': closePhoto,
+  'remove-photo': dropPhoto, keepsake: saveKeepsake, backup: saveBackup, restore: pickRestore };
 app.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button || !app.contains(button)) return;

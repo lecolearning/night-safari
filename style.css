@@ -205,7 +205,15 @@ footer.credit a{color:var(--lilac)}
 .bingo-instructions{font-size:13px;line-height:1.5;color:var(--ink-soft);margin:12px 0 8px}
 .bingo-legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;font-weight:800;color:var(--ink-soft)}
 /* Four columns: wider squares, so labels break kindly instead of mid-word. */
-.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:14px 0;width:100%}
+.grid{display:grid;grid-template-columns:repeat(var(--across,4),minmax(0,1fr));gap:7px;margin:14px 0;width:100%}
+/* Five across is the big card. The squares are narrower, so the type steps down, the
+   icon shrinks, and a word too long for its square breaks rather than spilling out. */
+.grid-5{gap:5px}
+.grid-5 .cell{min-height:118px;padding:10px 3px 16px;gap:4px;font-size:clamp(9.5px,2.5vw,12px);overflow-wrap:anywhere}
+.grid-5 .bingo-icon{width:28px;height:28px;flex-basis:28px;font-size:20px}
+.grid-5 .cell-photo-btn{width:24px;height:24px}
+.grid-5 .cell-undo-hint{right:27px;font-size:7.5px;letter-spacing:0}
+.grid-5 .cell-shared{font-size:7px}
 .cell-wrap{position:relative;display:flex;min-width:0}
 .cell{position:relative;width:100%;min-height:128px;min-width:0;overflow-wrap:break-word;border-radius:13px 11px 14px 12px / 12px 14px 11px 13px;background:#fff;border:var(--border);border-bottom:5px solid #dd8eaa;padding:14px 5px 18px;
   font-size:clamp(11px,2.9vw,13px);font-weight:800;line-height:1.25;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
@@ -281,6 +289,11 @@ footer.credit a{color:var(--lilac)}
 .bingo-supper>span{font-size:28px}
 .bingo-supper p{font-size:13px;line-height:1.6;margin:0}
 .bingo-supper strong{color:var(--gold)}
+.bingo-grow{display:block;width:100%;font:inherit;font-size:15px;font-weight:800;cursor:pointer;color:var(--ink);
+  background:var(--lilac);border:var(--border);border-radius:16px;min-height:56px;padding:12px 16px;margin:0 0 14px;
+  box-shadow:3px 4px 0 rgba(0,0,0,.32)}
+.bingo-grow:active{transform:translate(2px,3px);box-shadow:1px 1px 0 rgba(0,0,0,.32)}
+.bingo-grow small{display:block;margin-top:4px;font-size:11.5px;font-weight:700;line-height:1.45;color:var(--ink-soft)}
 .bingo-reset{font:inherit;font-size:13px;font-weight:700;color:#efe7ff;cursor:pointer;min-height:44px;background:none;border:1px solid #a39abe;border-radius:999px;padding:10px 18px}
 .bingo-reset-note{font-size:11px;color:#d8d0eb;margin:8px 0 0}
 .bingo-summary-link{font:inherit;font-size:14px;font-weight:800;cursor:pointer;color:var(--ink);background:var(--mint);border:var(--border);border-radius:999px;min-height:44px;padding:11px 20px;margin:0 0 18px;box-shadow:3px 4px 0 rgba(0,0,0,.32)}
@@ -323,7 +336,9 @@ footer.credit a{color:var(--lilac)}
   .bingo-page .wrap{padding-left:10px;padding-right:10px}
   .bingo-card{padding-left:8px;padding-right:8px}
   .grid{gap:5px}
+  .grid-5{gap:4px}
   .cell{padding-left:2px;padding-right:2px;padding-bottom:20px;min-height:134px}
+  .grid-5 .cell{padding-left:1px;padding-right:1px;padding-bottom:17px;min-height:126px}
   .bingo-icon{width:30px;height:30px;flex-basis:30px;font-size:22px}
   .cell-photo-btn{width:28px;height:28px;right:2px;bottom:2px}
   .bingo-card-top{gap:6px}
